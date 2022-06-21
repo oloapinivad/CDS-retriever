@@ -6,6 +6,7 @@ cdo = Cdo()
 
 # check with cdo is the file is complete (approximately correct)
 def is_file_complete(filename, minimum_steps) : 
+    filename = str(filename)
     try : 
         out = cdo.ntime(input=filename, options = '-s')
         # this is an hack due to warning being reported by cdo into the output!
@@ -47,7 +48,7 @@ def year_retrieve(var, freq, year, grid, levelout, outdir) :
     
         # special feature for preliminary back extension
         if int(year) < year_preliminary :
-            kind = kind + 'preliminary-back-extension'
+            kind = kind + '-preliminary-back-extension'
 
         # check what I am making up
         biglist = ['kind', 'product_type', 'var', 'year', 'freq', 'months', 'day', 'time', 'levelout', 'level', 'grid', 'outfile']
@@ -55,7 +56,7 @@ def year_retrieve(var, freq, year, grid, levelout, outdir) :
             if isinstance(locals()[test], list):
                 print(test + ': ' + ' '.join(locals()[test]))
             else : 
-                print(test + ': ' + locals()[test])
+                print(test + ': ' + str(locals()[test]))
 
         # get right grid for the API call
         gridapi = grid.split('x')[0]
@@ -109,7 +110,7 @@ def define_time(freq) :
             minimum_steps = 365*4
         elif freq == '1hr' :
             time = [str(i).zfill(2)+':00' for i in range(0,24)]
-            minimum_steps = 365*12
+            minimum_steps = 365*24
 
     return product_type, day, time, time_kind, minimum_steps
 
@@ -120,11 +121,11 @@ def create_filename(var, freq, grid, levelout, year) :
 
 # wrapper for simple parallel function for conversion to netcdf
 def year_convert(infile, outfile) :
-    cdo.copy(input = infile, output = outfile, options = '-f nc4 -z zip')
+    cdo.copy(input = str(infile), output = str(outfile), options = '-f nc4 -z zip')
 
 # get the first and last year from files of a given folder
 def first_last_year(filepattern) :
-    filelist = glob.glob(filepattern)
+    filelist = glob.glob(str(filepattern))
     first_year=str(sorted(filelist)[0].split('_')[-1].split('.')[0])
     last_year=str(sorted(filelist)[-1].split('_')[-1].split('.')[0])
     return first_year, last_year

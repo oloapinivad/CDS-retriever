@@ -31,11 +31,11 @@ storedir = '/work/scratch/users/paolo/ERA5'
 var = 'geopotential'
 
 # the years you need to retrieve
-year1 = 1990
-year2 = 1991
+year1 = 1950
+year2 = 2021
 
 # parallel process
-nprocs = 2
+nprocs = 5
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
@@ -68,7 +68,6 @@ do_postproc = True # postproc data with CDO
 
 # create list of years
 years = [str(i) for i in range(year1,year2+1)]
-#years = ['1990', '1991', '1992']
 
 # define the out dir and file 
 savedir =  Path(tmpdir, var)
@@ -135,10 +134,11 @@ if do_postproc :
         filepattern = Path(destdir, create_filename(var, freq, grid, levelout, '????') + '.nc')
         first_year, last_year = first_last_year(filepattern)
         
-        dayfile = Path(daydir, create_filename(var, 'day', grid, levelout, first_year + '-' + last_year) + '.nc')
-        monfile = Path(mondir, create_filename(var, 'mon', grid, levelout, first_year + '-' + last_year) + '.nc')
+        dayfile = str(Path(daydir, create_filename(var, 'day', grid, levelout, first_year + '-' + last_year) + '.nc'))
+        monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, first_year + '-' + last_year) + '.nc'))
 
         if os.path.exists(dayfile):
             os.remove(dayfile)
-        cdo.daymean(input = '-cat ' + filepattern, outfile = dayfile, options = '-f nc4 -z zip')
+
+        cdo.daymean(input = '-cat ' + str(filepattern), output = dayfile, options = '-f nc4 -z zip')
         cdo.monmean(input = dayfile, output = monfile, options = '-f nc4 -z zip')
