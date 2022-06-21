@@ -71,7 +71,7 @@ years = [str(i) for i in range(year1,year2+1)]
 #years = ['1990', '1991', '1992']
 
 # define the out dir and file 
-savedir =  os.path.join(tmpdir, var)
+savedir =  Path(tmpdir, var)
 Path(savedir).mkdir(parents=True, exist_ok=True)
 
 # retrieve block
@@ -94,7 +94,7 @@ if do_retrieve:
 #  
 if do_postproc :
 
-    destdir = os.path.join(storedir, var, freq)
+    destdir = Path(storedir, var, freq)
     Path(destdir).mkdir(parents=True, exist_ok=True)
 
     # loop on the years create the parallel process for a fast conversion
@@ -104,8 +104,8 @@ if do_postproc :
         for year in lyears : 
             print(year)
             filename = create_filename(var, freq, grid, levelout, year)
-            infile = os.path.join(savedir, filename + '.grib')
-            outfile = os.path.join(destdir, filename + '.nc')
+            infile = Path(savedir, filename + '.grib')
+            outfile = Path(destdir, filename + '.nc')
             p = Process(target=year_convert, args=(infile, outfile))
             #p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
             p.start()
@@ -117,9 +117,9 @@ if do_postproc :
 
     # extra processing for monthly data
     if freq == "mon" : 
-        filepattern = os.path.join(destdir, create_filename(var, freq, grid, levelout, '????') + '.nc')
+        filepattern = Path(destdir, create_filename(var, freq, grid, levelout, '????') + '.nc')
         first_year, last_year = first_last_year(filepattern)
-        mergefile = os.path.join(destdir, create_filename(var, freq, grid, levelout, first_year + '-' + last_year) + '.nc')
+        mergefile = Path(destdir, create_filename(var, freq, grid, levelout, first_year + '-' + last_year) + '.nc')
         if os.path.exists(mergefile):
             os.remove(mergefile)
         cdo.cat(input = filepattern, output = mergefile)
@@ -128,16 +128,15 @@ if do_postproc :
 
     # extra processing for daily data
     else : 
-        daydir = os.path.join(storedir, var, 'day')
+        daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]   
         Path(daydir).mkdir(parents=True, exist_ok=True)
-        mondir = os.path.join(storedir, var, 'mon')
         Path(mondir).mkdir(parents=True, exist_ok=True)
 
-        filepattern = os.path.join(destdir, create_filename(var, freq, grid, levelout, '????') + '.nc')
+        filepattern = Path(destdir, create_filename(var, freq, grid, levelout, '????') + '.nc')
         first_year, last_year = first_last_year(filepattern)
-
-        dayfile = os.path.join(daydir, create_filename(var, 'day', grid, levelout, first_year + '-' + last_year) + '.nc')
-        monfile = os.path.join(mondir, create_filename(var, 'mon', grid, levelout, first_year + '-' + last_year) + '.nc')
+        
+        dayfile = Path(daydir, create_filename(var, 'day', grid, levelout, first_year + '-' + last_year) + '.nc')
+        monfile = Path(mondir, create_filename(var, 'mon', grid, levelout, first_year + '-' + last_year) + '.nc')
 
         if os.path.exists(dayfile):
             os.remove(dayfile)

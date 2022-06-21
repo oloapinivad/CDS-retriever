@@ -1,5 +1,5 @@
 import cdsapi
-import os
+from pathlib import Path
 import glob
 from cdo import Cdo
 cdo = Cdo()
@@ -27,6 +27,9 @@ def is_file_complete(filename, minimum_steps) :
  # big function for retrieval
 def year_retrieve(var, freq, year, grid, levelout, outdir) : 
 
+    # year for preliminary era5 reanalysis
+    year_preliminary = 1959
+
     # configuration part (level)
     level, level_kind = define_level(levelout)
     kind = 'reanalysis-era5-' + level_kind 
@@ -37,13 +40,13 @@ def year_retrieve(var, freq, year, grid, levelout, outdir) :
     months = [str(i).zfill(2) for i in range(1,12+1)]
 
     filename =  create_filename(var, freq, grid, levelout, year) + '.grib'
-    outfile = os.path.join(outdir, filename)
+    outfile = Path(outdir, filename)
 
     run_year = is_file_complete(outfile, minimum_steps) 
     if run_year : 
     
         # special feature for preliminary back extension
-        if int(year) < 1959 :
+        if int(year) < year_preliminary :
             kind = kind + 'preliminary-back-extension'
 
         # check what I am making up
@@ -54,25 +57,25 @@ def year_retrieve(var, freq, year, grid, levelout, outdir) :
             else : 
                 print(test + ': ' + locals()[test])
 
-            # get right grid for the API call
-            gridapi = grid.split('x')[0]
+        # get right grid for the API call
+        gridapi = grid.split('x')[0]
 
-            # run the API
-            c = cdsapi.Client()
-            c.retrieve(
-                kind,
-                {
-                    'product_type': product_type,
-                    'format': 'grib',
-                    'variable': var,
-                    'pressure_level': level,
-                    'year': year,
-                    'month': months,
-                    'day': day,
-                    'time': time,
-                    'grid': [ gridapi, gridapi ]
-                },
-                outfile)
+        # run the API
+        c = cdsapi.Client()
+        c.retrieve(
+            kind,
+            {
+                'product_type': product_type,
+                'format': 'grib',
+                'variable': var,
+                'pressure_level': level,
+                'year': year,
+                'month': months,
+                'day': day,
+                'time': time,
+                'grid': [ gridapi, gridapi ]
+            },
+            outfile)
 
 # define propertes for vertical levels
 def define_level(levelout) : 
