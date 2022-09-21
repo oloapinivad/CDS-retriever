@@ -25,7 +25,7 @@ def is_file_complete(filename, minimum_steps) :
         retrieve = False
     return retrieve
     
- # big function for retrieval
+# big function for retrieval
 def year_retrieve(var, freq, year, grid, levelout, outdir) : 
 
     # year for preliminary era5 reanalysis

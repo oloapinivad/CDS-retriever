@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # basic python3 scripts to retrieve ERA5 data from the CDS, to replace old Bash scripts 
 # Parallel retrieval is done as a function of the years (set nprocs)
@@ -20,22 +20,23 @@ cdo=Cdo()
  
 ######## -----   USER CONFIGURATION ------- ########
 
- # where this is downloaded
+ # where data is downloaded
 tmpdir = '/work/scratch/users/paolo/era5'
 
 # where data is stored
 #storedir = '/work/datasets/obs/ERA5'
 storedir = '/work/scratch/users/paolo/ERA5'
 
-# the variable you want to retrieve 
+# the variable you want to retrieve  (CDS format)
 var = 'geopotential'
 
 # the years you need to retrieve
+# so far anythin before 1959 is calling the preliminary dataset
 year1 = 1950
-year2 = 2021
+year2 = 2022
 
-# parallel process
-nprocs = 5
+# parallel processes
+nprocs = 15
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
@@ -57,6 +58,7 @@ freq='6hrs'
 levelout='500hPa'
 
 ##### - Grid selection ---- ####
+# any format that can be interpreted by CDS
 #grid = '0.25x0.25'
 grid = '2.5x2.5'
 
@@ -93,6 +95,9 @@ if do_retrieve:
 #  
 if do_postproc :
 
+    cdo.debug=True
+
+    print('Running postproc...')
     destdir = Path(storedir, var, freq)
     Path(destdir).mkdir(parents=True, exist_ok=True)
 
@@ -101,7 +106,7 @@ if do_postproc :
     yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
     for lyears in yearlist:
         for year in lyears : 
-            print(year)
+            print('Conversion of ' + year)
             filename = create_filename(var, freq, grid, levelout, year)
             infile = Path(savedir, filename + '.grib')
             outfile = Path(destdir, filename + '.nc')
@@ -114,11 +119,15 @@ if do_postproc :
         for process in processes:
             process.join()
 
+        print('Conversion complete!')
+
     # extra processing for monthly data
     if freq == "mon" : 
+        print('Extra processing for monthly...')
         filepattern = Path(destdir, create_filename(var, freq, grid, levelout, '????') + '.nc')
         first_year, last_year = first_last_year(filepattern)
         mergefile = Path(destdir, create_filename(var, freq, grid, levelout, first_year + '-' + last_year) + '.nc')
+        print(mergefile)
         if os.path.exists(mergefile):
             os.remove(mergefile)
         cdo.cat(input = filepattern, output = mergefile)
@@ -127,6 +136,7 @@ if do_postproc :
 
     # extra processing for daily data
     else : 
+        print('Extra processing for daily and 6hrs...')
         daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]   
         Path(daydir).mkdir(parents=True, exist_ok=True)
         Path(mondir).mkdir(parents=True, exist_ok=True)
