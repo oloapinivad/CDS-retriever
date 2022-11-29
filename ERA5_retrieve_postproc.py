@@ -7,6 +7,7 @@
 # Monthly means as well as hourly data can be downloaded
 # Multiple grids are supported
 # Both surface variables and pressure levels are supported. 
+# Support for area selection has been included
 # @ Author: Paolo Davini, CNR-ISAC, Jun 2022
 
 import os
@@ -28,21 +29,23 @@ tmpdir = '/work/scratch/users/paolo/era5'
 storedir = '/work/scratch/users/paolo/ERA5'
 
 # the variable you want to retrieve  (CDS format)
-var = 'geopotential'
+var = 'potential_vorticity'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
-year1 = 1950
-year2 = 2022
+year1 = 1991
+year2 = 1991
 
 # parallel processes
-nprocs = 15
+nprocs = 1
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
-#freq='mon'
-freq='6hrs'
-#freq='1hr'
+#freq = 'mon'
+#freq = '6hrs'
+freq = '1hr'
+#freq = 'instant'
+
 
 ##### - Vertical levels ---- ####
 # multiple options for surface levels and for pressure levels
@@ -51,20 +54,28 @@ freq='6hrs'
 #levelout = 'sfc' 
 
 # for plev variables
+levelout='plev37'
 #levelout='plev19'
 #levelout='plev8'
 
 # for single pressure level vars
-levelout='500hPa'
+#levelout = '500hPa'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
 #grid = '0.25x0.25'
 grid = '2.5x2.5'
 
+
+##### - Region ---- ####
+# 'global' or any format that can be interpeted by CDS
+# the order should be North, West, South, East
+area = 'global'
+area =  [50, -20, 40, 0]
+
 #### - control for the structure --- ###
 do_retrieve = True # retrieve data from CDS
-do_postproc = True # postproc data with CDO
+do_postproc = False # postproc data with CDO
 
 ######## ----- END OF USER CONFIGURATION ------- ########
 
@@ -84,7 +95,7 @@ if do_retrieve:
     for lyears in yearlist:
         for year in lyears : 
             print(year)
-            p = Process(target=year_retrieve, args=(var, freq, year, grid, levelout, savedir))
+            p = Process(target=year_retrieve, args=(var, freq, year, grid, levelout, area, savedir))
             p.start()
             processes.append(p)
 

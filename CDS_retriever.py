@@ -2,6 +2,7 @@ import cdsapi
 from pathlib import Path
 import glob
 from cdo import Cdo
+from pprint import pprint
 cdo = Cdo()
 
 # check with cdo is the file is complete (approximately correct)
@@ -24,9 +25,10 @@ def is_file_complete(filename, minimum_steps) :
         print(filename + ' is complete! Going to next one...')
         retrieve = False
     return retrieve
+
     
 # big function for retrieval
-def year_retrieve(var, freq, year, grid, levelout, outdir) : 
+def year_retrieve(var, freq, year, grid, levelout, area, outdir) : 
 
     # year for preliminary era5 reanalysis
     year_preliminary = 1959
@@ -40,7 +42,7 @@ def year_retrieve(var, freq, year, grid, levelout, outdir) :
 
     months = [str(i).zfill(2) for i in range(1,12+1)]
 
-    filename =  create_filename(var, freq, grid, levelout, year) + '.grib'
+    filename =  create_filename(var, freq, grid, levelout, area, year) + '.grib'
     outfile = Path(outdir, filename)
 
     run_year = is_file_complete(outfile, minimum_steps) 
@@ -51,31 +53,40 @@ def year_retrieve(var, freq, year, grid, levelout, outdir) :
             kind = kind + '-preliminary-back-extension'
 
         # check what I am making up
-        biglist = ['kind', 'product_type', 'var', 'year', 'freq', 'months', 'day', 'time', 'levelout', 'level', 'grid', 'outfile']
-        for test in biglist : 
-            if isinstance(locals()[test], list):
-                print(test + ': ' + ' '.join(locals()[test]))
-            else : 
-                print(test + ': ' + str(locals()[test]))
+        #biglist = ['kind', 'product_type', 'var', 'year', 'freq', 'months', 'day', 'time', 'levelout', 'level', 'grid', 'outfile']
+        #for test in biglist : 
+        #    if isinstance(locals()[test], list):
+        #        print(test + ': ' + ' '.join(locals()[test]))
+        #    else : 
+        #        print(test + ': ' + str(locals()[test]))
 
         # get right grid for the API call
         gridapi = grid.split('x')[0]
 
+        retrieve_dict = {
+            'product_type': product_type,
+            'format': 'grib',
+            'variable': var,
+            'year': year,
+            'month': months,
+            'day': day,
+            'time': time,
+            'grid': [ gridapi, gridapi ]
+        }
+
+        if level_kind == 'pressure_level' :
+            retrieve_dict['pressure_level'] = level
+
+        if area != 'global' :
+            retrieve_dict['area'] = area
+
+
+        pprint(retrieve_dict)
         # run the API
         c = cdsapi.Client()
         c.retrieve(
             kind,
-            {
-                'product_type': product_type,
-                'format': 'grib',
-                'variable': var,
-                'pressure_level': level,
-                'year': year,
-                'month': months,
-                'day': day,
-                'time': time,
-                'grid': [ gridapi, gridapi ]
-            },
+            retrieve_dict,
             outfile)
 
 # define propertes for vertical levels
@@ -89,6 +100,10 @@ def define_level(levelout) :
             level= ['10','50','100','250','500','700','850','1000']
         elif levelout == 'plev19' :
             level = ['1000','925','850','700','600','500','400','300','250','200','150','100','70','50','30','20','10','5','1']
+        elif levelout == 'plev37' : 
+            level =  ['1', '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '125', '150', '175', 
+                '200', '225', '250', '300', '350', '400', '450', '500', '550', '600', '650', '700', '750',
+                '775', '800', '825', '850', '875', '900', '925', '950', '975', '1000']
         elif levelout == '500hPa' :
             level = ['500']
     return level, level_kind
@@ -101,7 +116,7 @@ def define_time(freq) :
         product_type = 'monthly_averaged_reanalysis'
         time_kind = '-monthly-means'
         minimum_steps = 12
-    else : 
+    elif freq in ['1hr','6hrs'] : 
         product_type = 'reanalysis'
         time_kind = ''
         day = [str(i).zfill(2) for i in range(1,31+1)]
@@ -111,13 +126,22 @@ def define_time(freq) :
         elif freq == '1hr' :
             time = [str(i).zfill(2)+':00' for i in range(0,24)]
             minimum_steps = 365*24
+    elif freq == 'instant' : 
+        product_type = 'reanalysis'
+        time_kind = ''
+        day = ['01']
+        time = ['00:00']
+        minimum_steps = 12
 
     return product_type, day, time, time_kind, minimum_steps
 
 # create filename function
-def create_filename(var, freq, grid, levelout, year) :
-     filename = 'ERA5_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year
-     return(filename)
+def create_filename(var, freq, grid, levelout, area, year) :
+    filename = 'ERA5_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year
+    if area != 'global' : 
+        strarea = "_".join([str(x) for x in area])
+        filename = filename + '_' + strarea
+    return(filename)
 
 # wrapper for simple parallel function for conversion to netcdf
 def year_convert(infile, outfile) :
