@@ -3,6 +3,7 @@ from pathlib import Path
 import glob
 from cdo import Cdo
 from pprint import pprint
+import datetime
 cdo = Cdo()
 
 # check with cdo is the file is complete (approximately correct)
@@ -51,6 +52,7 @@ def year_retrieve(var, freq, year, grid, levelout, area, outdir) :
         # special feature for preliminary back extension
         if int(year) < year_preliminary :
             kind = kind + '-preliminary-back-extension'
+            product_type = 'reanalysis-monthly-means-of-daily-means' # hack
 
         # check what I am making up
         #biglist = ['kind', 'product_type', 'var', 'year', 'freq', 'months', 'day', 'time', 'levelout', 'level', 'grid', 'outfile']
@@ -80,7 +82,7 @@ def year_retrieve(var, freq, year, grid, levelout, area, outdir) :
         if area != 'global' :
             retrieve_dict['area'] = area
 
-
+        pprint(kind)
         pprint(retrieve_dict)
         # run the API
         c = cdsapi.Client()
@@ -136,20 +138,38 @@ def define_time(freq) :
     return product_type, day, time, time_kind, minimum_steps
 
 # create filename function
-def create_filename(var, freq, grid, levelout, area, year) :
-    filename = 'ERA5_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year
+def create_filename(var, freq, grid, levelout, area, year1, year2=None) :
+    filename = 'ERA5_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year1
+    if (freq == 'mon') and (year2 is not None):
+        filename = filename + '-' + year2
     if area != 'global' : 
         strarea = "_".join([str(x) for x in area])
         filename = filename + '_' + strarea
     return(filename)
 
 # wrapper for simple parallel function for conversion to netcdf
-def year_convert(infile, outfile) :
-    cdo.copy(input = str(infile), output = str(outfile), options = '-f nc4 -z zip')
+def year_convert(infile, outfile, debug = False) :
+    cdo.debug=debug
+    cdo.copy(input = str(infile), output = str(outfile), options = '-t ecmwf -f nc4 -z zip --eccodes')
 
 # get the first and last year from files of a given folder
 def first_last_year(filepattern) :
     filelist = glob.glob(str(filepattern))
     first_year=str(sorted(filelist)[0].split('_')[-1].split('.')[0])
     last_year=str(sorted(filelist)[-1].split('_')[-1].split('.')[0])
+    # monthly data
+    if len(first_year)>4:
+        first_year = first_year.split('-')[0]
+    if len(last_year)>4:
+        last_year = last_year.split('-')[1]
     return first_year, last_year
+
+
+def which_new_years_download(storedir, var, freq, grid, levelout, area):
+
+    destdir = Path(storedir, var, freq)
+    filepattern = Path(destdir, create_filename(var, freq, grid, levelout, area, '????', '????') + '.nc')
+    _, year1 = first_last_year(filepattern)
+    year1 = int(year1) + 1
+    year2 = datetime.datetime.now().year - 1
+    return year1, year2
