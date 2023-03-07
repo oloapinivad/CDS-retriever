@@ -15,7 +15,6 @@ from pathlib import Path
 from cdo import Cdo
 from multiprocessing import Process
 import glob
-import sys
 
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
 cdo=Cdo()
@@ -24,33 +23,37 @@ cdo=Cdo()
 ######## -----   USER CONFIGURATION ------- ########
 
  # where data is downloaded
-tmpdir = '/work/scratch/users/paolo/era5'
+tmpdir = '/work/scratch/users/paolo/era5-land'
 
 # where data is stored
 storedir = '/work/datasets/obs/ERA5'
 #storedir = '/work/scratch/users/paolo/era5/definitive'
 
+# which ERA dataset you want to download: only ERA5 and ERA5-Land available
+dataset = 'ERA5'
+#dataset = 'ERA5-Land'
+
 # the variable you want to retrieve  (CDS format)
-var = 'total_precipitation'
+var = '2m_temperature'
 #var = '2m_temperature'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
-year1 = 1959
-year2 = 1979
+year1 = 2001
+year2 = 2001
 
 # option to extend current dataset
 # this will superseed the year1/year2 values
 update = False
 
 # parallel processes
-nprocs = 8
+nprocs = 1
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
 #freq = 'mon'
 #freq = '6hrs'
-freq = '1hr'
+freq = 'mon'
 #freq = 'instant'
 
 
@@ -80,15 +83,19 @@ grid = '0.25x0.25'
 area = 'global'
 #area =  [50, -20, 40, 0]
 
+##### - Download request ---- ####
+# do you want to download yearly chunks or monthly chunks?
+download_request='monthly'
+
 #### - control for the structure --- ###
 do_retrieve = True # retrieve data from CDS
-do_postproc = True # postproc data with CDO
+do_postproc = False # postproc data with CDO
 
 ######## ----- END OF USER CONFIGURATION ------- ########
 
 if update:
     print("Update flag is true, detection of years...")
-    year1, year2 = which_new_years_download(storedir, var, freq, grid, levelout, area)
+    year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
     print(year1, year2)
     if year1 > year2:
         print('Everything you want has been already downloaded, disabling retrieve...')
@@ -114,7 +121,8 @@ if do_retrieve:
     for lyears in yearlist:
         for year in lyears : 
             print(year)
-            p = Process(target=year_retrieve, args=(var, freq, year, grid, levelout, area, savedir))
+            p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
+                                                    area, savedir, download_request))
             p.start()
             processes.append(p)
 
@@ -137,7 +145,7 @@ if do_postproc :
     for lyears in yearlist:
         for year in lyears : 
             print('Conversion of ' + year)
-            filename = create_filename(var, freq, grid, levelout, area, year)
+            filename = create_filename(dataset, var, freq, grid, levelout, area, year)
             infile = Path(savedir, filename + '.grib')
             outfile = Path(destdir, filename + '.nc')
             p = Process(target=year_convert, args=(infile, outfile))
@@ -156,17 +164,17 @@ if do_postproc :
         print('Extra processing for monthly...')
 
         
-        filepattern = str(Path(destdir, create_filename(var, freq, grid, levelout, area, '????') + '.nc'))
+        filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
         first_year, last_year = first_last_year(filepattern)
 
         if update:
              # check if big file exists
-            bigfile = str(Path(destdir, create_filename(var, freq, grid, levelout, area, '????', '????') + '.nc'))
+            bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
             filebase = glob.glob(bigfile)
             first_year, _ = first_last_year(bigfile)
             filepattern = filebase + glob.glob(filepattern) 
 
-        mergefile = str(Path(destdir, create_filename(var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+        mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
         print(mergefile)
         if os.path.exists(mergefile):
             os.remove(mergefile)
@@ -183,10 +191,10 @@ if do_postproc :
         Path(daydir).mkdir(parents=True, exist_ok=True)
         Path(mondir).mkdir(parents=True, exist_ok=True)
 
-        filepattern = Path(destdir, create_filename(var, freq, grid, levelout, area, '????') + '.nc')
+        filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
         first_year, last_year = first_last_year(filepattern)
         
-        dayfile = str(Path(daydir, create_filename(var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+        dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
         #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
 
         if os.path.exists(dayfile):

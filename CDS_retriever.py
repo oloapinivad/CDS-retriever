@@ -4,6 +4,8 @@ import glob
 from cdo import Cdo
 from pprint import pprint
 import datetime
+import os
+import sys
 cdo = Cdo()
 
 # check with cdo is the file is complete (approximately correct)
@@ -29,67 +31,83 @@ def is_file_complete(filename, minimum_steps) :
 
     
 # big function for retrieval
-def year_retrieve(var, freq, year, grid, levelout, area, outdir) : 
+def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly') : 
 
     # year for preliminary era5 reanalysis
     year_preliminary = 1959
 
     # configuration part (level)
     level, level_kind = define_level(levelout)
-    kind = 'reanalysis-era5-' + level_kind 
+    if dataset == 'ERA5':
+        kind = 'reanalysis-era5-' + level_kind 
+    elif dataset == 'ERA5-Land':
+        kind = 'reanalysis-era5-land'
 
     product_type, day, time, time_kind, minimum_steps = define_time(freq)
     kind = kind + time_kind
 
-    months = [str(i).zfill(2) for i in range(1,12+1)]
+    if request=='yearly':
+        months = [[str(i).zfill(2) for i in range(1,12+1)]]
+    elif request=='monthly':
+        months = [str(i).zfill(2) for i in range(1,12+1)]
+    else:
+        sys.exit('Wrong request!')
 
-    filename =  create_filename(var, freq, grid, levelout, area, year) + '.grib'
-    outfile = Path(outdir, filename)
+    # check if yearly file is complete
+    basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
+    run_year = is_file_complete(Path(outdir, basicname + '.grib'), minimum_steps) 
 
-    run_year = is_file_complete(outfile, minimum_steps) 
-    if run_year : 
-    
-        # special feature for preliminary back extension
-        if int(year) < year_preliminary :
-            kind = kind + '-preliminary-back-extension'
-            product_type = 'reanalysis-monthly-means-of-daily-means' # hack
+    if run_year: 
+        for month in months: 
 
-        # check what I am making up
-        #biglist = ['kind', 'product_type', 'var', 'year', 'freq', 'months', 'day', 'time', 'levelout', 'level', 'grid', 'outfile']
-        #for test in biglist : 
-        #    if isinstance(locals()[test], list):
-        #        print(test + ': ' + ' '.join(locals()[test]))
-        #    else : 
-        #        print(test + ': ' + str(locals()[test]))
+            if request=='monthly':
+                filename =  basicname + month + '.grib'
+            elif request=='yearly':
+                filename =  basicname + '.grib'
+            
+            outfile = Path(outdir, filename)
 
-        # get right grid for the API call
-        gridapi = grid.split('x')[0]
+            # special feature for preliminary back extension
+            if int(year) < year_preliminary and dataset == 'ERA5':
+                kind = kind + '-preliminary-back-extension'
+                product_type = 'reanalysis-monthly-means-of-daily-means' # hack
 
-        retrieve_dict = {
-            'product_type': product_type,
-            'format': 'grib',
-            'variable': var,
-            'year': year,
-            'month': months,
-            'day': day,
-            'time': time,
-            'grid': [ gridapi, gridapi ]
-        }
+            
+            # get right grid for the API call
+            gridapi = grid.split('x')[0]
 
-        if level_kind == 'pressure_level' :
-            retrieve_dict['pressure_level'] = level
+            retrieve_dict = {
+                'product_type': product_type,
+                'format': 'grib',
+                'variable': var,
+                'year': year,
+                'month': month,
+                'day': day,
+                'time': time,
+                'grid': [ gridapi, gridapi ]
+            }
 
-        if area != 'global' :
-            retrieve_dict['area'] = area
+            if level_kind == 'pressure_level' :
+                retrieve_dict['pressure_level'] = level
 
-        pprint(kind)
-        pprint(retrieve_dict)
-        # run the API
-        c = cdsapi.Client()
-        c.retrieve(
-            kind,
-            retrieve_dict,
-            outfile)
+            if area != 'global' :
+                retrieve_dict['area'] = area
+
+            pprint(kind)
+            pprint(retrieve_dict)
+            # run the API
+            c = cdsapi.Client()
+            c.retrieve(
+                kind,
+                retrieve_dict,
+                outfile)
+            
+            if request == 'monthly':
+                flist = str(Path(outdir, basicname + '??.grib'))
+                cdo.cat(input = flist, output = str(Path(outdir, basicname + '.grib')))
+                for f in glob.glob(flist):
+                    os.remove(f)
+
 
 # define propertes for vertical levels
 def define_level(levelout) : 
@@ -138,8 +156,8 @@ def define_time(freq) :
     return product_type, day, time, time_kind, minimum_steps
 
 # create filename function
-def create_filename(var, freq, grid, levelout, area, year1, year2=None) :
-    filename = 'ERA5_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year1
+def create_filename(dataset, var, freq, grid, levelout, area, year1, year2=None) :
+    filename = dataset + '_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year1
     if (freq == 'mon') and (year2 is not None):
         filename = filename + '-' + year2
     if area != 'global' : 
@@ -165,10 +183,10 @@ def first_last_year(filepattern) :
     return first_year, last_year
 
 
-def which_new_years_download(storedir, var, freq, grid, levelout, area):
+def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area):
 
     destdir = Path(storedir, var, freq)
-    filepattern = Path(destdir, create_filename(var, freq, grid, levelout, area, '????', '????') + '.nc')
+    filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc')
     _, year1 = first_last_year(filepattern)
     year1 = int(year1) + 1
     year2 = datetime.datetime.now().year - 1
