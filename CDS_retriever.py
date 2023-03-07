@@ -42,6 +42,8 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
         kind = 'reanalysis-era5-' + level_kind 
     elif dataset == 'ERA5-Land':
         kind = 'reanalysis-era5-land'
+    else: 
+        sys.exit('Unknown dataset!')
 
     product_type, day, time, time_kind, minimum_steps = define_time(freq)
     kind = kind + time_kind
@@ -72,9 +74,6 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 kind = kind + '-preliminary-back-extension'
                 product_type = 'reanalysis-monthly-means-of-daily-means' # hack
 
-            
-            # get right grid for the API call
-            gridapi = grid.split('x')[0]
 
             retrieve_dict = {
                 'product_type': product_type,
@@ -84,8 +83,13 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 'month': month,
                 'day': day,
                 'time': time,
-                'grid': [ gridapi, gridapi ]
             }
+
+            if grid not in ['full']:
+                # get right grid for the API call
+                gridapi = grid.split('x')[0]
+                retrieve_dict['grid'] = [ gridapi, gridapi ]
+
 
             if level_kind == 'pressure_level' :
                 retrieve_dict['pressure_level'] = level

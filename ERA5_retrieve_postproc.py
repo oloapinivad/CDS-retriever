@@ -53,8 +53,8 @@ nprocs = 1
 # three different options, monthly get monthly means. 
 #freq = 'mon'
 #freq = '6hrs'
-freq = 'mon'
-#freq = 'instant'
+freq = '1hr'
+#freq = 'instant' #beware
 
 
 ##### - Vertical levels ---- ####
@@ -73,15 +73,17 @@ levelout = 'sfc'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
-grid = '0.25x0.25'
+# full means that no choiche is made, i.e. the original grid is provided
+grid = 'full'
+#grid = '0.1x0.1'
 #grid = '2.5x2.5'
 
 
 ##### - Region ---- ####
 # 'global' or any format that can be interpeted by CDS
 # the order should be North, West, South, East
-area = 'global'
-#area =  [50, -20, 40, 0]
+#area = 'global'
+area =  [65, -15, 25, 45]
 
 ##### - Download request ---- ####
 # do you want to download yearly chunks or monthly chunks?
