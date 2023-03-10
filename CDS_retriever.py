@@ -45,15 +45,17 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
     else: 
         sys.exit('Unknown dataset!')
 
+    # extract time information
     product_type, day, time, time_kind, minimum_steps = define_time(freq)
     kind = kind + time_kind
 
+    # set up the months loop
     if request=='yearly':
         months = [[str(i).zfill(2) for i in range(1,12+1)]]
     elif request=='monthly':
         months = [str(i).zfill(2) for i in range(1,12+1)]
     else:
-        sys.exit('Wrong request!')
+        sys.exit('Wrong download request!')
 
     # check if yearly file is complete
     basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
@@ -90,7 +92,6 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 gridapi = grid.split('x')[0]
                 retrieve_dict['grid'] = [ gridapi, gridapi ]
 
-
             if level_kind == 'pressure_level' :
                 retrieve_dict['pressure_level'] = level
 
@@ -106,11 +107,12 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 retrieve_dict,
                 outfile)
             
-            if request == 'monthly':
-                flist = str(Path(outdir, basicname + '??.grib'))
-                cdo.cat(input = flist, output = str(Path(outdir, basicname + '.grib')))
-                for f in glob.glob(flist):
-                    os.remove(f)
+        # cat together the files and rmove the monthly ones
+        if request == 'monthly':
+            flist = str(Path(outdir, basicname + '??.grib'))
+            cdo.cat(input = flist, output = str(Path(outdir, basicname + '.grib')))
+            for f in glob.glob(flist):
+                os.remove(f)
 
 
 # define propertes for vertical levels
@@ -186,7 +188,7 @@ def first_last_year(filepattern) :
         last_year = last_year.split('-')[1]
     return first_year, last_year
 
-
+# for autosearch of the missing years
 def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area):
 
     destdir = Path(storedir, var, freq)
