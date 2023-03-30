@@ -33,8 +33,8 @@ def is_file_complete(filename, minimum_steps) :
 # big function for retrieval
 def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly') : 
 
-    # year for preliminary era5 reanalysis
-    year_preliminary = 1959
+    # year for preliminary era5 reanalysis - now deprecated
+    #year_preliminary = 1900
 
     # configuration part (level)
     level, level_kind = define_level(levelout)
@@ -72,10 +72,9 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             outfile = Path(outdir, filename)
 
             # special feature for preliminary back extension
-            if int(year) < year_preliminary and dataset == 'ERA5':
-                kind = kind + '-preliminary-back-extension'
-                product_type = 'reanalysis-monthly-means-of-daily-means' # hack
-
+            #if int(year) < year_preliminary and dataset == 'ERA5':
+            #    kind = kind + '-preliminary-back-extension'
+            #    product_type = 'reanalysis-monthly-means-of-daily-means' # hack
 
             retrieve_dict = {
                 'product_type': product_type,

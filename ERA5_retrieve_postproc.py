@@ -23,7 +23,7 @@ cdo=Cdo()
 ######## -----   USER CONFIGURATION ------- ########
 
  # where data is downloaded
-tmpdir = '/work/scratch/users/paolo/era5-land'
+tmpdir = '/work/scratch/users/paolo/era5'
 
 # where data is stored
 storedir = '/work/datasets/obs/ERA5'
@@ -34,20 +34,20 @@ dataset = 'ERA5'
 #dataset = 'ERA5-Land'
 
 # the variable you want to retrieve  (CDS format)
-var = '2m_temperature'
+var = 'total_precipitation'
 #var = '2m_temperature'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
-year1 = 2001
-year2 = 2001
+year1 = 1940
+year2 = 1959
 
 # option to extend current dataset
 # this will superseed the year1/year2 values
 update = False
 
 # parallel processes
-nprocs = 1
+nprocs = 10
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
@@ -74,7 +74,8 @@ levelout = 'sfc'
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
 # full means that no choiche is made, i.e. the original grid is provided
-grid = 'full'
+#grid = 'full'
+grid = '0.25x0.25'
 #grid = '0.1x0.1'
 #grid = '2.5x2.5'
 
@@ -82,16 +83,16 @@ grid = 'full'
 ##### - Region ---- ####
 # 'global' or any format that can be interpeted by CDS
 # the order should be North, West, South, East
-#area = 'global'
-area =  [65, -15, 25, 45]
+area = 'global'
+#area =  [65, -15, 25, 45]
 
 ##### - Download request ---- ####
 # do you want to download yearly chunks or monthly chunks?
-download_request='monthly'
+download_request='yearly'
 
 #### - control for the structure --- ###
-do_retrieve = True # retrieve data from CDS
-do_postproc = False # postproc data with CDO
+do_retrieve = False # retrieve data from CDS
+do_postproc = True # postproc data with CDO
 
 ######## ----- END OF USER CONFIGURATION ------- ########
 
