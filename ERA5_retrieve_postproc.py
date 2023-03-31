@@ -34,13 +34,13 @@ dataset = 'ERA5'
 #dataset = 'ERA5-Land'
 
 # the variable you want to retrieve  (CDS format)
-var = 'total_precipitation'
-#var = '2m_temperature'
+#var = 'total_precipitation'
+var = 'geopotential'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
 year1 = 1940
-year2 = 1959
+year2 = 2022
 
 # option to extend current dataset
 # this will superseed the year1/year2 values
@@ -52,8 +52,8 @@ nprocs = 10
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
 #freq = 'mon'
-#freq = '6hrs'
-freq = '1hr'
+freq = '6hrs'
+#freq = '1hr'
 #freq = 'instant' #beware
 
 
@@ -69,15 +69,15 @@ levelout = 'sfc'
 #levelout='plev8'
 
 # for single pressure level vars
-#levelout = '500hPa'
+levelout = '500hPa'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
 # full means that no choiche is made, i.e. the original grid is provided
 #grid = 'full'
-grid = '0.25x0.25'
+#grid = '0.25x0.25'
 #grid = '0.1x0.1'
-#grid = '2.5x2.5'
+grid = '2.5x2.5'
 
 
 ##### - Region ---- ####
@@ -91,7 +91,7 @@ area = 'global'
 download_request='yearly'
 
 #### - control for the structure --- ###
-do_retrieve = False # retrieve data from CDS
+do_retrieve = True # retrieve data from CDS
 do_postproc = True # postproc data with CDO
 
 ######## ----- END OF USER CONFIGURATION ------- ########
@@ -184,7 +184,7 @@ if do_postproc :
         cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
         if isinstance(filepattern, str):
             loop = glob.glob(filepattern)
-        for f in glob.glob(loop): 
+            for f in loop: 
                 os.remove(f)
 
     # extra processing for daily data
