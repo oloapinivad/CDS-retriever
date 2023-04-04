@@ -15,7 +15,6 @@ from pathlib import Path
 from cdo import Cdo
 from multiprocessing import Process
 import glob
-import sys
 
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
 cdo=Cdo()
@@ -30,28 +29,32 @@ tmpdir = '/work/scratch/users/paolo/era5'
 storedir = '/work/datasets/obs/ERA5'
 #storedir = '/work/scratch/users/paolo/era5/definitive'
 
+# which ERA dataset you want to download: only ERA5 and ERA5-Land available
+dataset = 'ERA5'
+#dataset = 'ERA5-Land'
+
 # the variable you want to retrieve  (CDS format)
-var = 'total_precipitation'
-#var = '2m_temperature'
+#var = 'total_precipitation'
+var = 'geopotential'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
-year1 = 1959
-year2 = 1979
+year1 = 1940
+year2 = 2022
 
 # option to extend current dataset
 # this will superseed the year1/year2 values
 update = False
 
 # parallel processes
-nprocs = 8
+nprocs = 10
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
 #freq = 'mon'
-#freq = '6hrs'
-freq = '1hr'
-#freq = 'instant'
+freq = '6hrs'
+#freq = '1hr'
+#freq = 'instant' #beware
 
 
 ##### - Vertical levels ---- ####
@@ -66,19 +69,26 @@ levelout = 'sfc'
 #levelout='plev8'
 
 # for single pressure level vars
-#levelout = '500hPa'
+levelout = '500hPa'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
-grid = '0.25x0.25'
-#grid = '2.5x2.5'
+# full means that no choiche is made, i.e. the original grid is provided
+#grid = 'full'
+#grid = '0.25x0.25'
+#grid = '0.1x0.1'
+grid = '2.5x2.5'
 
 
 ##### - Region ---- ####
 # 'global' or any format that can be interpeted by CDS
 # the order should be North, West, South, East
 area = 'global'
-#area =  [50, -20, 40, 0]
+#area =  [65, -15, 25, 45]
+
+##### - Download request ---- ####
+# do you want to download yearly chunks or monthly chunks?
+download_request='yearly'
 
 #### - control for the structure --- ###
 do_retrieve = True # retrieve data from CDS
@@ -88,7 +98,7 @@ do_postproc = True # postproc data with CDO
 
 if update:
     print("Update flag is true, detection of years...")
-    year1, year2 = which_new_years_download(storedir, var, freq, grid, levelout, area)
+    year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
     print(year1, year2)
     if year1 > year2:
         print('Everything you want has been already downloaded, disabling retrieve...')
@@ -114,7 +124,8 @@ if do_retrieve:
     for lyears in yearlist:
         for year in lyears : 
             print(year)
-            p = Process(target=year_retrieve, args=(var, freq, year, grid, levelout, area, savedir))
+            p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
+                                                    area, savedir, download_request))
             p.start()
             processes.append(p)
 
@@ -137,7 +148,7 @@ if do_postproc :
     for lyears in yearlist:
         for year in lyears : 
             print('Conversion of ' + year)
-            filename = create_filename(var, freq, grid, levelout, area, year)
+            filename = create_filename(dataset, var, freq, grid, levelout, area, year)
             infile = Path(savedir, filename + '.grib')
             outfile = Path(destdir, filename + '.nc')
             p = Process(target=year_convert, args=(infile, outfile))
@@ -156,24 +167,24 @@ if do_postproc :
         print('Extra processing for monthly...')
 
         
-        filepattern = str(Path(destdir, create_filename(var, freq, grid, levelout, area, '????') + '.nc'))
+        filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
         first_year, last_year = first_last_year(filepattern)
 
         if update:
              # check if big file exists
-            bigfile = str(Path(destdir, create_filename(var, freq, grid, levelout, area, '????', '????') + '.nc'))
+            bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
             filebase = glob.glob(bigfile)
             first_year, _ = first_last_year(bigfile)
             filepattern = filebase + glob.glob(filepattern) 
 
-        mergefile = str(Path(destdir, create_filename(var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+        mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
         print(mergefile)
         if os.path.exists(mergefile):
             os.remove(mergefile)
         cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
         if isinstance(filepattern, str):
             loop = glob.glob(filepattern)
-        for f in glob.glob(loop): 
+            for f in loop: 
                 os.remove(f)
 
     # extra processing for daily data
@@ -183,10 +194,10 @@ if do_postproc :
         Path(daydir).mkdir(parents=True, exist_ok=True)
         Path(mondir).mkdir(parents=True, exist_ok=True)
 
-        filepattern = Path(destdir, create_filename(var, freq, grid, levelout, area, '????') + '.nc')
+        filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
         first_year, last_year = first_last_year(filepattern)
         
-        dayfile = str(Path(daydir, create_filename(var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+        dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
         #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
 
         if os.path.exists(dayfile):
