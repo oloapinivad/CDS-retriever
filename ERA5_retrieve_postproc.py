@@ -36,7 +36,7 @@ dataset = 'ERA5'
 
 # the list of variables you want to retrieve  (CDS format)
 # please note they must share the same properties!
-varlist = ['temperature', 'u_component_of_wind', 'v_component_of_wind', 'specific_humidity']
+varlist = ['top_net_solar_radiation', 'top_net_thermal_radiation', 'total_precipitation']
 #varlist = 'evaporation'
 #var = '2m_temperature'
 
@@ -64,12 +64,12 @@ freq = 'mon'
 # multiple options for surface levels and for pressure levels
 
 # for surface vars
-#levelout = 'sfc' 
+levelout = 'sfc' 
 
 # for plev variables
 #levelout='plev37'
 #levelout='plev19'
-levelout='plev8'
+#levelout='plev8'
 
 # for single pressure level vars
 #levelout = '500hPa'
