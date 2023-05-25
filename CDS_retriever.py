@@ -91,13 +91,14 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 gridapi = grid.split('x')[0]
                 retrieve_dict['grid'] = [ gridapi, gridapi ]
 
-            if level_kind == 'pressure_level' :
+            if level_kind == 'pressure-levels' :
                 retrieve_dict['pressure_level'] = level
 
             if area != 'global' :
                 retrieve_dict['area'] = area
 
             pprint(kind)
+            pprint(level_kind)
             pprint(retrieve_dict)
             # run the API
             c = cdsapi.Client()
