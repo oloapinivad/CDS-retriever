@@ -13,6 +13,7 @@
 import os
 from pathlib import Path
 from cdo import Cdo
+import shutil
 from multiprocessing import Process
 import glob
 
@@ -23,19 +24,21 @@ cdo=Cdo()
 ######## -----   USER CONFIGURATION ------- ########
 
  # where data is downloaded
-tmpdir = '/work/scratch/users/paolo/era5'
+tmpdir = '/scratch/b/b382076/era5'
 
 # where data is stored
-storedir = '/work/datasets/obs/ERA5'
+storedir = '/work/bb1153/b382076/ERA5'
 #storedir = '/work/scratch/users/paolo/era5/definitive'
 
 # which ERA dataset you want to download: only ERA5 and ERA5-Land available
 dataset = 'ERA5'
 #dataset = 'ERA5-Land'
 
-# the variable you want to retrieve  (CDS format)
-#var = 'total_precipitation'
-var = 'geopotential'
+# the list of variables you want to retrieve  (CDS format)
+# please note they must share the same properties!
+varlist = ['temperature', 'u_component_of_wind', 'v_component_of_wind', 'specific_humidity']
+#varlist = 'evaporation'
+#var = '2m_temperature'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
@@ -51,8 +54,8 @@ nprocs = 10
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
-#freq = 'mon'
-freq = '6hrs'
+freq = 'mon'
+#freq = '6hrs'
 #freq = '1hr'
 #freq = 'instant' #beware
 
@@ -61,23 +64,23 @@ freq = '6hrs'
 # multiple options for surface levels and for pressure levels
 
 # for surface vars
-levelout = 'sfc' 
+#levelout = 'sfc' 
 
 # for plev variables
 #levelout='plev37'
 #levelout='plev19'
-#levelout='plev8'
+levelout='plev8'
 
 # for single pressure level vars
-levelout = '500hPa'
+#levelout = '500hPa'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
 # full means that no choiche is made, i.e. the original grid is provided
-#grid = 'full'
+grid = 'full'
 #grid = '0.25x0.25'
 #grid = '0.1x0.1'
-grid = '2.5x2.5'
+#grid = '2.5x2.5'
 
 
 ##### - Region ---- ####
@@ -93,115 +96,133 @@ download_request='yearly'
 #### - control for the structure --- ###
 do_retrieve = True # retrieve data from CDS
 do_postproc = True # postproc data with CDO
+do_align = True #set equal time axis to monthly data to work with Xarray
 
 ######## ----- END OF USER CONFIGURATION ------- ########
 
-if update:
-    print("Update flag is true, detection of years...")
-    year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
-    print(year1, year2)
-    if year1 > year2:
-        print('Everything you want has been already downloaded, disabling retrieve...')
-        do_retrieve=False
-        if (freq == 'mon'):
-            print('Everything you want has been already postprocessed, disabling postproc...')
-            do_postproc=False
+# safecheck
+if isinstance(varlist, str):
+    varlist = [varlist]
+
+for var in varlist: 
+
+    if update:
+        print("Update flag is true, detection of years...")
+        year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
+        print(year1, year2)
+        if year1 > year2:
+            print('Everything you want has been already downloaded, disabling retrieve...')
+            do_retrieve=False
+            if (freq == 'mon'):
+                print('Everything you want has been already postprocessed, disabling postproc...')
+                do_postproc=False
 
 
-# create list of years
-years = [str(i) for i in range(year1,year2+1)]
+    # create list of years
+    years = [str(i) for i in range(year1,year2+1)]
 
-# define the out dir and file 
-savedir =  Path(tmpdir, var)
-Path(savedir).mkdir(parents=True, exist_ok=True)
+    # define the out dir and file 
+    savedir =  Path(tmpdir, var)
+    Path(savedir).mkdir(parents=True, exist_ok=True)
 
-# retrieve block
-if do_retrieve: 
+    # retrieve block
+    if do_retrieve: 
 
-    # loop on the years create the parallel process
-    processes = []
-    yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
-    for lyears in yearlist:
-        for year in lyears : 
-            print(year)
-            p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
-                                                    area, savedir, download_request))
-            p.start()
-            processes.append(p)
+        # loop on the years create the parallel process
+        processes = []
+        yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+        for lyears in yearlist:
+            for year in lyears : 
+                print(year)
+                p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
+                                                        area, savedir, download_request))
+                p.start()
+                processes.append(p)
 
-        # wait for all the processes to end
-        for process in processes:
-            process.join()
+            # wait for all the processes to end
+            for process in processes:
+                process.join()
 
-#  
-if do_postproc :
+    #  
+    if do_postproc :
 
-    cdo.debug=True
+        cdo.debug=True
 
-    print('Running postproc...')
-    destdir = Path(storedir, var, freq)
-    Path(destdir).mkdir(parents=True, exist_ok=True)
+        print('Running postproc...')
+        destdir = Path(storedir, freq)
+        Path(destdir).mkdir(parents=True, exist_ok=True)
 
-    # loop on the years create the parallel process for a fast conversion
-    processes = []
-    yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
-    for lyears in yearlist:
-        for year in lyears : 
-            print('Conversion of ' + year)
-            filename = create_filename(dataset, var, freq, grid, levelout, area, year)
-            infile = Path(savedir, filename + '.grib')
-            outfile = Path(destdir, filename + '.nc')
-            p = Process(target=year_convert, args=(infile, outfile))
-            #p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
-            p.start()
-            processes.append(p)
+        # loop on the years create the parallel process for a fast conversion
+        processes = []
+        yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+        for lyears in yearlist:
+            for year in lyears : 
+                print('Conversion of ' + year)
+                filename = create_filename(dataset, var, freq, grid, levelout, area, year)
+                infile = Path(savedir, filename + '.grib')
+                outfile = Path(destdir, filename + '.nc')
+                p = Process(target=year_convert, args=(infile, outfile))
+                #p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
+                p.start()
+                processes.append(p)
 
-        # wait for all the processes to end
-        for process in processes:
-            process.join()
+            # wait for all the processes to end
+            for process in processes:
+                process.join()
 
-        print('Conversion complete!')
+            print('Conversion complete!')
 
-    # extra processing for monthly data
-    if freq == "mon" : 
-        print('Extra processing for monthly...')
+        # extra processing for monthly data
+        if freq == "mon" : 
+            print('Extra processing for monthly...')
 
-        
-        filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
-        first_year, last_year = first_last_year(filepattern)
+            
+            filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
+            first_year, last_year = first_last_year(filepattern)
 
-        if update:
-             # check if big file exists
-            bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
-            filebase = glob.glob(bigfile)
-            first_year, _ = first_last_year(bigfile)
-            filepattern = filebase + glob.glob(filepattern) 
+            if update:
+                # check if big file exists
+                bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
+                filebase = glob.glob(bigfile)
+                first_year, _ = first_last_year(bigfile)
+                filepattern = filebase + glob.glob(filepattern) 
 
-        mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
-        print(mergefile)
-        if os.path.exists(mergefile):
-            os.remove(mergefile)
-        cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
-        if isinstance(filepattern, str):
-            loop = glob.glob(filepattern)
-            for f in loop: 
-                os.remove(f)
+            mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+            print(mergefile)
+            if os.path.exists(mergefile):
+                print(f'Removing existing file {mergefile}...')
+                os.remove(mergefile)
+            cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
+            if isinstance(filepattern, str):
+                loop = glob.glob(filepattern)
+                for f in loop: 
+                    os.remove(f)
 
-    # extra processing for daily data
-    else : 
-        print('Extra processing for daily and 6hrs...')
-        daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]   
-        Path(daydir).mkdir(parents=True, exist_ok=True)
-        Path(mondir).mkdir(parents=True, exist_ok=True)
+            # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading 
+            if do_align:
+                first_time=cdo.showtime(input=f'-seltimestep,1 {mergefile}')[0]
+                if first_time != '00:00:00':
+                    tempfile = str(Path(tmpdir, 'temp_align.nc'))
+                    shutil.move(mergefile, tempfile)
+                    cdo.shifttime('-6hours', input = tempfile, output = mergefile, options = '-f nc4 -z zip')
+                    os.remove(tempfile)
 
-        filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
-        first_year, last_year = first_last_year(filepattern)
-        
-        dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
-        #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
 
-        if os.path.exists(dayfile):
-            os.remove(dayfile)
+        # extra processing for daily data
+        else : 
+            print('Extra processing for daily and 6hrs...')
+            daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]   
+            Path(daydir).mkdir(parents=True, exist_ok=True)
+            Path(mondir).mkdir(parents=True, exist_ok=True)
 
-        cdo.daymean(input = '-cat ' + str(filepattern), output = dayfile, options = '-f nc4 -z zip')
-        #cdo.monmean(input = dayfile, output = monfile, options = '-f nc4 -z zip')
+            filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
+            first_year, last_year = first_last_year(filepattern)
+            
+            dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+            #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+
+            if os.path.exists(dayfile):
+                os.remove(dayfile)
+
+            cdo.daymean(input = '-cat ' + str(filepattern), output = dayfile, options = '-f nc4 -z zip')
+            #cdo.monmean(input = dayfile, output = monfile, options = '-f nc4 -z zip')
