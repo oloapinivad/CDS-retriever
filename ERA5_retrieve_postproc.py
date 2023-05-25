@@ -192,6 +192,7 @@ for var in varlist:
             if os.path.exists(mergefile):
                 print(f'Removing existing file {mergefile}...')
                 os.remove(mergefile)
+            print(f'Merging together into {mergefile}...')
             cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
             if isinstance(filepattern, str):
                 loop = glob.glob(filepattern)
@@ -200,6 +201,7 @@ for var in varlist:
 
             # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading 
             if do_align:
+                print(f'Aligningment required...')
                 first_time=cdo.showtime(input=f'-seltimestep,1 {mergefile}')[0]
                 if first_time != '00:00:00':
                     tempfile = str(Path(tmpdir, 'temp_align.nc'))
