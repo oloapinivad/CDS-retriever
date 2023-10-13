@@ -1,26 +1,27 @@
-import cdsapi
-from pathlib import Path
-import glob
-from cdo import Cdo
-from pprint import pprint
-import datetime
 import os
 import sys
+import glob
+from pathlib import Path
+from pprint import pprint
+import datetime
+import cdsapi
+from cdo import Cdo
+
 cdo = Cdo()
 
 # check with cdo is the file is complete (approximately correct)
-def is_file_complete(filename, minimum_steps) : 
+def is_file_complete(filename, minimum_steps):
     filename = str(filename)
-    try : 
+    try:
         out = cdo.ntime(input=filename, options = '-s')
         # this is an hack due to warning being reported by cdo into the output!
-        for n in out : 
-            if (len(n) <= 5) :
+        for n in out: 
+            if (len(n) <= 5):
                 nt = n  
-    except : 
-        print(filename + ' is missing')
+    except:
+        print (filename + ' is missing')
         nt = 0 
-    print(nt)
+
     if (int(nt) < minimum_steps) :
         print('Need to retrieve ' + filename)
         retrieve = True
@@ -31,7 +32,7 @@ def is_file_complete(filename, minimum_steps) :
 
     
 # big function for retrieval
-def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly') : 
+def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly'): 
 
     # year for preliminary era5 reanalysis - now deprecated
     #year_preliminary = 1900
@@ -61,14 +62,14 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
     basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
     run_year = is_file_complete(Path(outdir, basicname + '.grib'), minimum_steps) 
 
-    if run_year: 
-        for month in months: 
+    if run_year:
+        for month in months:
 
             if request=='monthly':
                 filename =  basicname + month + '.grib'
             elif request=='yearly':
                 filename =  basicname + '.grib'
-            
+
             outfile = Path(outdir, filename)
 
             # special feature for preliminary back extension
@@ -91,13 +92,14 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 gridapi = grid.split('x')[0]
                 retrieve_dict['grid'] = [ gridapi, gridapi ]
 
-            if level_kind == 'pressure_level' :
+            if level_kind == 'pressure-levels' :
                 retrieve_dict['pressure_level'] = level
 
             if area != 'global' :
                 retrieve_dict['area'] = area
 
             pprint(kind)
+            pprint(level_kind)
             pprint(retrieve_dict)
             # run the API
             c = cdsapi.Client()
@@ -105,7 +107,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 kind,
                 retrieve_dict,
                 outfile)
-            
+   
         # cat together the files and rmove the monthly ones
         if request == 'monthly':
             flist = str(Path(outdir, basicname + '??.grib'))
@@ -115,43 +117,45 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
 
 
 # define propertes for vertical levels
-def define_level(levelout) : 
+def define_level(levelout):
     if levelout == 'sfc' :
         level_kind = 'single-levels'
         level = 'sfc'
     else : 
         level_kind = 'pressure-levels'
-        if levelout == 'plev8' :
+        if levelout == 'plev8':
             level= ['10','50','100','250','500','700','850','1000']
-        elif levelout == 'plev19' :
-            level = ['1000','925','850','700','600','500','400','300','250','200','150','100','70','50','30','20','10','5','1']
-        elif levelout == 'plev37' : 
-            level =  ['1', '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '125', '150', '175', 
-                '200', '225', '250', '300', '350', '400', '450', '500', '550', '600', '650', '700', '750',
-                '775', '800', '825', '850', '875', '900', '925', '950', '975', '1000']
+        elif levelout == 'plev19':
+            level = ['1000','925','850','700','600','500','400','300','250',
+                     '200','150','100','70','50','30','20','10','5','1']
+        elif levelout == 'plev37':
+            level =  ['1', '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', 
+                      '125', '150', '175', '200', '225', '250', '300', '350', '400',
+                       '450', '500', '550', '600', '650', '700', '750', '775', '800',
+                        '825', '850', '875', '900', '925', '950', '975', '1000']
         elif levelout == '500hPa' :
             level = ['500']
     return level, level_kind
 
-# define properties for time 
+# define properties for time
 def define_time(freq) :
-    if freq == 'mon' :
+    if freq == 'mon':
         time = ['00:00']
         day = ['01']
         product_type = 'monthly_averaged_reanalysis'
         time_kind = '-monthly-means'
         minimum_steps = 12
-    elif freq in ['1hr','6hrs'] : 
+    elif freq in ['1hr','6hrs']:
         product_type = 'reanalysis'
         time_kind = ''
         day = [str(i).zfill(2) for i in range(1,31+1)]
-        if freq == '6hrs' :
+        if freq == '6hrs':
             time = [str(i).zfill(2)+':00' for i in range(0,24,6)]
             minimum_steps = 365*4
-        elif freq == '1hr' :
+        elif freq == '1hr':
             time = [str(i).zfill(2)+':00' for i in range(0,24)]
             minimum_steps = 365*24
-    elif freq == 'instant' : 
+    elif freq == 'instant':
         product_type = 'reanalysis'
         time_kind = ''
         day = ['01']
@@ -165,10 +169,10 @@ def create_filename(dataset, var, freq, grid, levelout, area, year1, year2=None)
     filename = dataset + '_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year1
     if (freq == 'mon') and (year2 is not None):
         filename = filename + '-' + year2
-    if area != 'global' : 
+    if area != 'global':
         strarea = "_".join([str(x) for x in area])
         filename = filename + '_' + strarea
-    return(filename)
+    return filename
 
 # wrapper for simple parallel function for conversion to netcdf
 def year_convert(infile, outfile, debug = False) :
@@ -182,7 +186,7 @@ def first_last_year(filepattern) :
     last_year=str(sorted(filelist)[-1].split('_')[-1].split('.')[0])
     # monthly data
     if len(first_year)>4:
-        first_year = first_year.split('-')[0]
+        first_year = first_year.split('-',maxsplit=1)[0]
     if len(last_year)>4:
         last_year = last_year.split('-')[1]
     return first_year, last_year
@@ -191,7 +195,8 @@ def first_last_year(filepattern) :
 def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area):
 
     destdir = Path(storedir, var, freq)
-    filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc')
+    filepattern = Path(destdir, create_filename(dataset, var, freq, grid, 
+                                                levelout, area, '????', '????') + '.nc')
     _, year1 = first_last_year(filepattern)
     year1 = int(year1) + 1
     year2 = datetime.datetime.now().year - 1
