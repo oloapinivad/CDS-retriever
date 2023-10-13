@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     if update:
         print("Update flag is true, detection of years...")
-        year1, year2 = which_new_years_download(storedir, var, freq, grid, levelout, area)
+        year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
         print(year1, year2)
         if year1 > year2:
             print('Everything you want has been already downloaded, disabling retrieve...')
@@ -96,8 +96,8 @@ if __name__ == "__main__":
         for lyears in yearlist:
             for year in lyears : 
                 print(year)
-                p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, area, savedir, 
-                                                        download_request))
+                p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
+                                                        area, savedir, download_request))
                 p.start()
                 processes.append(p)
 
@@ -111,7 +111,7 @@ if __name__ == "__main__":
         cdo.debug=True
 
         print('Running postproc...')
-        destdir = Path(storedir, var, freq)
+        destdir = Path(storedir, freq)
         Path(destdir).mkdir(parents=True, exist_ok=True)
 
         # loop on the years create the parallel process for a fast conversion
@@ -152,7 +152,9 @@ if __name__ == "__main__":
             mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
             print(mergefile)
             if os.path.exists(mergefile):
+                print(f'Removing existing file {mergefile}...')
                 os.remove(mergefile)
+            print(f'Merging together into {mergefile}...')
             cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
             if isinstance(filepattern, str):
                 loop = glob.glob(filepattern)
