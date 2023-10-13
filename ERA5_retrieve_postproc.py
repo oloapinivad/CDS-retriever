@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # Access and use the configuration options as needed
     tmpdir = config["dirs"]["tmpdir"]
     storedir = config["dirs"]["storedir"]
-    var = config["var"]
+    varlist = config["var"]
     freq = config["freq"]
     grid = config["grid"]
     levelout = config["levelout"]
@@ -69,123 +69,128 @@ if __name__ == "__main__":
  
     ######## ----- END OF USER CONFIGURATION ------- ########
 
-    if update:
-        print("Update flag is true, detection of years...")
-        year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
-        print(year1, year2)
-        if year1 > year2:
-            print('Everything you want has been already downloaded, disabling retrieve...')
-            do_retrieve=False
-            if (freq == 'mon'):
-                print('Everything you want has been already postprocessed, disabling postproc...')
-                do_postproc=False
+    if isinstance(varlist, str):	
+        varlist = [varlist]	
 
-    # create list of years
-    years = [str(i) for i in range(year1,year2+1)]
+    for var in varlist: 
 
-    # define the out dir and file 
-    savedir =  Path(tmpdir, var)
-    Path(savedir).mkdir(parents=True, exist_ok=True)
+        if update:
+            print("Update flag is true, detection of years...")
+            year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
+            print(year1, year2)
+            if year1 > year2:
+                print('Everything you want has been already downloaded, disabling retrieve...')
+                do_retrieve=False
+                if (freq == 'mon'):
+                    print('Everything you want has been already postprocessed, disabling postproc...')
+                    do_postproc=False
 
-    # retrieve block
-    if do_retrieve: 
+        # create list of years
+        years = [str(i) for i in range(year1,year2+1)]
 
-        # loop on the years create the parallel process
-        processes = []
-        yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
-        for lyears in yearlist:
-            for year in lyears : 
-                print(year)
-                p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
-                                                        area, savedir, download_request))
-                p.start()
-                processes.append(p)
+        # define the out dir and file 
+        savedir =  Path(tmpdir, var)
+        Path(savedir).mkdir(parents=True, exist_ok=True)
 
-            # wait for all the processes to end
-            for process in processes:
-                process.join()
+        # retrieve block
+        if do_retrieve: 
 
-    #  
-    if do_postproc :
+            # loop on the years create the parallel process
+            processes = []
+            yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+            for lyears in yearlist:
+                for year in lyears : 
+                    print(year)
+                    p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
+                                                            area, savedir, download_request))
+                    p.start()
+                    processes.append(p)
 
-        cdo.debug=True
+                # wait for all the processes to end
+                for process in processes:
+                    process.join()
 
-        print('Running postproc...')
-        destdir = Path(storedir, freq)
-        Path(destdir).mkdir(parents=True, exist_ok=True)
+        #  
+        if do_postproc :
 
-        # loop on the years create the parallel process for a fast conversion
-        processes = []
-        yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
-        for lyears in yearlist:
-            for year in lyears : 
-                print('Conversion of ' + year)
-                filename = create_filename(dataset, var, freq, grid, levelout, area, year)
-                infile = Path(savedir, filename + '.grib')
-                outfile = Path(destdir, filename + '.nc')
-                p = Process(target=year_convert, args=(infile, outfile))
-                #p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
-                p.start()
-                processes.append(p)
+            cdo.debug=True
 
-            # wait for all the processes to end
-            for process in processes:
-                process.join()
+            print('Running postproc...')
+            destdir = Path(storedir, freq)
+            Path(destdir).mkdir(parents=True, exist_ok=True)
 
-            print('Conversion complete!')
+            # loop on the years create the parallel process for a fast conversion
+            processes = []
+            yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+            for lyears in yearlist:
+                for year in lyears : 
+                    print('Conversion of ' + year)
+                    filename = create_filename(dataset, var, freq, grid, levelout, area, year)
+                    infile = Path(savedir, filename + '.grib')
+                    outfile = Path(destdir, filename + '.nc')
+                    p = Process(target=year_convert, args=(infile, outfile))
+                    #p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
+                    p.start()
+                    processes.append(p)
 
-        # extra processing for monthly data
-        if freq == "mon" : 
-            print('Extra processing for monthly...')
+                # wait for all the processes to end
+                for process in processes:
+                    process.join()
 
-            
-            filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
-            first_year, last_year = first_last_year(filepattern)
+                print('Conversion complete!')
 
-            if update:
-                # check if big file exists
-                bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
-                filebase = glob.glob(bigfile)
-                first_year, _ = first_last_year(bigfile)
-                filepattern = filebase + glob.glob(filepattern) 
+            # extra processing for monthly data
+            if freq == "mon" : 
+                print('Extra processing for monthly...')
 
-            mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
-            print(mergefile)
-            if os.path.exists(mergefile):
-                print(f'Removing existing file {mergefile}...')
-                os.remove(mergefile)
-            print(f'Merging together into {mergefile}...')
-            cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
-            if isinstance(filepattern, str):
-                loop = glob.glob(filepattern)
-                for f in loop: 
-                    os.remove(f)
+                
+                filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
+                first_year, last_year = first_last_year(filepattern)
 
-            # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading 
-            if do_align:
-                print(f'Aligningment required...')
-                first_time=cdo.showtime(input=f'-seltimestep,1 {mergefile}')[0]
-                if first_time != '00:00:00':
-                    tempfile = str(Path(tmpdir, 'temp_align.nc'))
-                    shutil.move(mergefile, tempfile)
-                    cdo.shifttime('-6hours', input = tempfile, output = mergefile, options = '-f nc4 -z zip')
-                    os.remove(tempfile)
+                if update:
+                    # check if big file exists
+                    bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
+                    filebase = glob.glob(bigfile)
+                    first_year, _ = first_last_year(bigfile)
+                    filepattern = filebase + glob.glob(filepattern) 
 
-        # extra processing for daily data
-        else: 
-            print('Extra processing for daily and 6hrs...')
-            daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]   
-            Path(daydir).mkdir(parents=True, exist_ok=True)
-            Path(mondir).mkdir(parents=True, exist_ok=True)
+                mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+                print(mergefile)
+                if os.path.exists(mergefile):
+                    print(f'Removing existing file {mergefile}...')
+                    os.remove(mergefile)
+                print(f'Merging together into {mergefile}...')
+                cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
+                if isinstance(filepattern, str):
+                    loop = glob.glob(filepattern)
+                    for f in loop: 
+                        os.remove(f)
 
-            filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
-            first_year, last_year = first_last_year(filepattern)
-            
-            dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
-            #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+                # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading 
+                if do_align:
+                    print(f'Aligningment required...')
+                    first_time=cdo.showtime(input=f'-seltimestep,1 {mergefile}')[0]
+                    if first_time != '00:00:00':
+                        tempfile = str(Path(tmpdir, 'temp_align.nc'))
+                        shutil.move(mergefile, tempfile)
+                        cdo.shifttime('-6hours', input = tempfile, output = mergefile, options = '-f nc4 -z zip')
+                        os.remove(tempfile)
 
-            if os.path.exists(dayfile):
-                os.remove(dayfile)
+            # extra processing for daily data
+            else: 
+                print('Extra processing for daily and 6hrs...')
+                daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]   
+                Path(daydir).mkdir(parents=True, exist_ok=True)
+                Path(mondir).mkdir(parents=True, exist_ok=True)
 
-            cdo.daymean(input = '-cat ' + str(filepattern), output = dayfile, options = '-f nc4 -z zip')
-            #cdo.monmean(input = dayfile, output = monfile, options = '-f nc4 -z zip')
+                filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
+                first_year, last_year = first_last_year(filepattern)
+                
+                dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+                #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+
+                if os.path.exists(dayfile):
+                    os.remove(dayfile)
+
+                cdo.daymean(input = '-cat ' + str(filepattern), output = dayfile, options = '-f nc4 -z zip')
+                #cdo.monmean(input = dayfile, output = monfile, options = '-f nc4 -z zip')
