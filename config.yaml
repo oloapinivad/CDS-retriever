@@ -1,0 +1,53 @@
+# USER CONFIGURATION
+
+
+dirs:
+  # where data is downloaded
+  tmpdir: '/work/scratch/users/paolo/era5'
+  # where data is stored
+  storedir: '/work/datasets/obs/ERA5'
+
+
+# the variable you want to retrieve (CDS format)
+var: 'total_precipitation'
+#var: '2m_temperature'
+
+# the years you need to retrieve
+# so far anything before 1959 is calling the preliminary dataset
+year1: 1959
+year2: 1979
+
+# Frequency
+# Three different options, monthly get monthly means.
+#freq: 'mon'
+#freq: '6hrs'
+freq: 'mon'
+#freq: 'instant'
+
+# Vertical levels
+# Multiple options for surface levels and for pressure levels
+# for surface vars
+levelout: 'sfc'
+
+# for plev variables
+#levelout: 'plev37'
+#levelout: 'plev19'
+#levelout: 'plev8'
+
+# for single pressure level vars
+#levelout: '500hPa'
+
+# Grid selection
+# any format that can be interpreted by CDS
+grid: '0.25x0.25'
+#grid: '2.5x2.5'
+
+# Region
+# 'global' or any format that can be interpreted by CDS
+# the order should be North, West, South, East
+area: 'global'
+#area: [50, -20, 40, 0]
+
+# Control for the structure
+do_retrieve: True # retrieve data from CDS
+do_postproc: False # post-process data with CDO
