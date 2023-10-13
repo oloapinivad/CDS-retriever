@@ -62,6 +62,7 @@ if __name__ == "__main__":
     do_postproc = config["do_postproc"]
     download_request = "yearly"
     do_align = False
+    dataset = 'ERA5'
 
     print(config)
 
@@ -95,8 +96,8 @@ if __name__ == "__main__":
         for lyears in yearlist:
             for year in lyears : 
                 print(year)
-                p = Process(target=year_retrieve, args=(var, freq, year, grid, levelout, area, 
-                                                        savedir, download_request))
+                p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, area, savedir, 
+                                                        download_request))
                 p.start()
                 processes.append(p)
 
@@ -119,7 +120,7 @@ if __name__ == "__main__":
         for lyears in yearlist:
             for year in lyears : 
                 print('Conversion of ' + year)
-                filename = create_filename(var, freq, grid, levelout, area, year)
+                filename = create_filename(dataset, var, freq, grid, levelout, area, year)
                 infile = Path(savedir, filename + '.grib')
                 outfile = Path(destdir, filename + '.nc')
                 p = Process(target=year_convert, args=(infile, outfile))
@@ -138,24 +139,24 @@ if __name__ == "__main__":
             print('Extra processing for monthly...')
 
             
-            filepattern = str(Path(destdir, create_filename(var, freq, grid, levelout, area, '????') + '.nc'))
+            filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
             first_year, last_year = first_last_year(filepattern)
 
             if update:
                 # check if big file exists
-                bigfile = str(Path(destdir, create_filename(var, freq, grid, levelout, area, '????', '????') + '.nc'))
+                bigfile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
                 filebase = glob.glob(bigfile)
                 first_year, _ = first_last_year(bigfile)
                 filepattern = filebase + glob.glob(filepattern) 
 
-            mergefile = str(Path(destdir, create_filename(var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+            mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, first_year + '-' + last_year) + '.nc'))
             print(mergefile)
             if os.path.exists(mergefile):
                 os.remove(mergefile)
             cdo.cat(input = filepattern, output = mergefile, options = '-f nc4 -z zip')
             if isinstance(filepattern, str):
                 loop = glob.glob(filepattern)
-            for f in glob.glob(loop): 
+                for f in loop: 
                     os.remove(f)
 
             # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading 
@@ -175,10 +176,10 @@ if __name__ == "__main__":
             Path(daydir).mkdir(parents=True, exist_ok=True)
             Path(mondir).mkdir(parents=True, exist_ok=True)
 
-            filepattern = Path(destdir, create_filename(var, freq, grid, levelout, area, '????') + '.nc')
+            filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
             first_year, last_year = first_last_year(filepattern)
             
-            dayfile = str(Path(daydir, create_filename(var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
+            dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
             #monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
 
             if os.path.exists(dayfile):
