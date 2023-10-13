@@ -1,0 +1,16 @@
+# Create the CDS-retriever environment:
+# mamba env create -f environment.yml 
+# or 
+# conda env create -f environment.yml
+
+name : CDS
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9,<3.12
+  - cdo 
+  - python-cdo 
+  - cdsapi 
+  - netcdf4
+  - xarray
+  - pyyaml
