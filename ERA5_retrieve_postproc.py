@@ -12,11 +12,12 @@
 
 import os
 from pathlib import Path
+from cdo import Cdo
+import shutil
 from multiprocessing import Process
 import glob
 import shutil
 import argparse
-from cdo import Cdo
 import yaml
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
 cdo=Cdo()
