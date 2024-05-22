@@ -16,89 +16,52 @@ from cdo import Cdo
 import shutil
 from multiprocessing import Process
 import glob
+import yaml
 
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
 cdo=Cdo()
 
- 
-######## -----   USER CONFIGURATION ------- ########
+# Import config
+with open('config.yml','r') as conf_file:
+    options = yaml.safe_load(conf_file)
 
- # where data is downloaded
-tmpdir = '/scratch/b/b382076/era5'
+tmpdir = options['tmpdir'] 
+storedir = options['storedir'] 
+dataset = options['dataset']
+varlist = options['varlist']
+year1 = options['year']['begin']
+year2 = options['year']['end']
+update = options['year']['update']
+freq = options['freq']
+levelout = options['levelout']
+grid = options['grid']
+area = options['area']
+nprocs = options['nprocs']
+download_request = options['download_request']
+do_retrieve = options['do_retrieve']
+do_postproc = options['do_postproc']
+do_align = options['do_align']
 
-# where data is stored
-storedir = '/work/bb1153/b382076/ERA5'
-#storedir = '/work/scratch/users/paolo/era5/definitive'
-
-# which ERA dataset you want to download: only ERA5 and ERA5-Land available
-dataset = 'ERA5'
-#dataset = 'ERA5-Land'
-
-# the list of variables you want to retrieve  (CDS format)
-# please note they must share the same properties!
-varlist = ['top_net_solar_radiation', 'top_net_thermal_radiation', 'total_precipitation']
-#varlist = 'evaporation'
-#var = '2m_temperature'
-
-# the years you need to retrieve
-# so far anythin before 1959 is calling the preliminary dataset
-year1 = 1940
-year2 = 2022
-
-# option to extend current dataset
-# this will superseed the year1/year2 values
-update = False
-
-# parallel processes
-nprocs = 10
-
-#### - Frequency ---  ####
-# three different options, monthly get monthly means. 
-freq = 'mon'
-#freq = '6hrs'
-#freq = '1hr'
-#freq = 'instant' #beware
-
-
-##### - Vertical levels ---- ####
-# multiple options for surface levels and for pressure levels
-
-# for surface vars
-levelout = 'sfc' 
-
-# for plev variables
-#levelout='plev37'
-#levelout='plev19'
-#levelout='plev8'
-
-# for single pressure level vars
-#levelout = '500hPa'
-
-##### - Grid selection ---- ####
-# any format that can be interpreted by CDS
-# full means that no choiche is made, i.e. the original grid is provided
-grid = 'full'
-#grid = '0.25x0.25'
-#grid = '0.1x0.1'
-#grid = '2.5x2.5'
-
-
-##### - Region ---- ####
-# 'global' or any format that can be interpeted by CDS
-# the order should be North, West, South, East
-area = 'global'
-#area =  [65, -15, 25, 45]
-
-##### - Download request ---- ####
-# do you want to download yearly chunks or monthly chunks?
-download_request='yearly'
-
-#### - control for the structure --- ###
-do_retrieve = True # retrieve data from CDS
-do_postproc = True # postproc data with CDO
-do_align = True #set equal time axis to monthly data to work with Xarray
-
-######## ----- END OF USER CONFIGURATION ------- ########
+print(f'\nDownloading files in {tmpdir}') 
+print(f'Storing final files in {storedir}')
+print(f'Downloading {varlist} from {dataset}')
+print(f'Data range: {year1}-{year2}')
+if update:
+    print('Uodating existing datasets...')
+print(f'Vertical levels: {levelout}')
+print(f'Data frequency: {freq}')
+print(f'Grid selection: {grid}')
+print(f'Area: {area}')
+print(f'Number of parallel processes: {nprocs}')
+print(f'Download {download_request} chunks')
+print('Actions:')
+if do_retrieve:
+    print('\t - Retrieving data')
+if do_postproc:
+    print('\t - Postprocess data')
+if do_align:
+    print('\t - Set a common time axis for monthly data')
+print()
 
 # safecheck
 if isinstance(varlist, str):
