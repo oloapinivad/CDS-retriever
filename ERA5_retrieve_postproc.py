@@ -30,10 +30,10 @@ def main():
     # Call argument parser
     args = parser()
 
-    # Load YAML file
-    config = load_config(args.config)
-  
-    if config:
+    if args.config:
+
+        # Load YAML file
+        config = load_config(args.config)
 
         # Print a description of the loaded configuration
         print_config(config)
@@ -88,6 +88,7 @@ def main():
 
             # define the out dir and file 
             savedir =  Path(tmpdir, var)
+            print(f'Creating directory {savedir} if it does not exist')
             Path(savedir).mkdir(parents=True, exist_ok=True)
 
             # retrieve block
@@ -97,8 +98,9 @@ def main():
                 processes = []
                 yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
                 for lyears in yearlist:
+                    print(f"Working on years {[lyears]}\n")
                     for year in lyears : 
-                        print(year)
+                        #print(year)
                         p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
                                                                 area, savedir, download_request))
                         p.start()
