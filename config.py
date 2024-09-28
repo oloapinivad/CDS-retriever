@@ -1,4 +1,20 @@
 import yaml
+import argparse
+
+
+def parser():
+    """
+    Command-line parser
+    """
+
+    parser = argparse.ArgumentParser(description="Script for data retrieval and processing")
+
+    parser.add_argument("-c", "--config", default="config_template.yml", help="Path to the YAML configuration file")
+    parser.add_argument("-n", "--nprocs", type=int, help="Number of parallel processes")
+    parser.add_argument("-u", "--update", action="store_true", help="Update existing dataset")
+
+    # Parse the command-line arguments
+    return parser.parse_args()
 
 
 def load_config(file_path):

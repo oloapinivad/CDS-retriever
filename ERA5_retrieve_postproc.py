@@ -17,11 +17,9 @@ from cdo import Cdo
 import shutil
 from multiprocessing import Process
 import glob
-import yaml
-import argparse
 
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
-from config import load_config, print_config
+from config import parser, load_config, print_config
 
 
 cdo=Cdo()
@@ -29,16 +27,12 @@ cdo=Cdo()
 
 def main():
 
-    # Define argument parser
-    parser = argparse.ArgumentParser(description="Process YAML configuration file.")
-    parser.add_argument('-c', '--config', required=True, help="Path to the YAML configuration file.")
-    
-    # Parse the arguments
-    args = parser.parse_args()
-    
+    # Call argument parser
+    args = parser()
+
     # Load YAML file
     config = load_config(args.config)
-    
+  
     if config:
 
         # Print a description of the loaded configuration
@@ -61,6 +55,15 @@ def main():
         do_retrieve = config['do_retrieve']
         do_postproc = config['do_postproc']
         do_align = config['do_align']
+
+        # Override config with command line args
+        if args.nprocs:
+            print(f"Overriding YAML nprocs ({config['nprocs']}) with command-line arg ({args.nprocs})")
+            nprocs = args.nprocs
+        if args.update:
+            print(f"Overriding YAML update ({config['year']['update']}) with command-line arg ({args.update})")
+            update = args.update
+
 
         # safecheck
         if isinstance(varlist, str):
