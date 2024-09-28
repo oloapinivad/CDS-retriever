@@ -98,7 +98,7 @@ def main():
                 processes = []
                 yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
                 for lyears in yearlist:
-                    print(f"Working on years {[lyears]}\n")
+                    print(f"Working on years {lyears}\n")
                     for year in lyears : 
                         #print(year)
                         p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 

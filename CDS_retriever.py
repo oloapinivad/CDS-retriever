@@ -98,9 +98,9 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             if area != 'global' :
                 retrieve_dict['area'] = area
 
-            pprint(kind)
-            pprint(level_kind)
-            pprint(retrieve_dict)
+            #pprint(kind)
+            #pprint(level_kind)
+            #pprint(retrieve_dict)
             # run the API
             c = cdsapi.Client()
             c.retrieve(
