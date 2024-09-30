@@ -1,0 +1,9 @@
+name: CDS_retrieve
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - cdsapi=0.7
+  - python-cdo=1.6
+  
