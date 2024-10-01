@@ -11,24 +11,40 @@ cdo = Cdo()
 
 # check with cdo is the file is complete (approximately correct)
 def is_file_complete(filename, minimum_steps):
-    filename = str(filename)
-    try:
-        out = cdo.ntime(input=filename, options = '-s')
-        # this is an hack due to warning being reported by cdo into the output!
-        for n in out: 
-            if (len(n) <= 5):
-                nt = n  
-    except:
-        print (filename + ' is missing')
-        nt = 0 
+    """
+    Is a file that we want to download complete?
+    
+    Returns:
+      a boolean, True if the file is ok, False if the file need to be downloaded
+    
+    """
 
-    if (int(nt) < minimum_steps) :
-        print('Need to retrieve ' + filename)
-        retrieve = True
-    else :
-        print(filename + ' is complete! Going to next one...')
-        retrieve = False
-    return retrieve
+    # set it false by default
+    filename = str(filename)
+
+    # if file exists
+    if os.path.exists(filename):
+
+        try:
+            # cdo ntime return a list with the length of the timesteps, select the first one
+            nt = int(cdo.ntime(input=filename, options = '-s')[0])
+            print(f'The file has {nt} timesteps...')
+
+            # if the number of steps is not enough...
+            if nt < minimum_steps:
+                print(f'The file {filename} looks incomplete with nsteps {nt} < {minimum_steps} minimum steps')
+                return False
+            else:
+                print(filename + ' is complete! Going to next one...')
+                return True
+
+        except KeyError:
+            print (filename + ' is corrupted')
+            return False
+
+    # if file does not exist
+    print (filename + ' is missing')
+    return False
 
     
 # big function for retrieval
