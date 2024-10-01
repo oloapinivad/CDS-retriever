@@ -76,9 +76,9 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
 
     # check if yearly file is complete
     basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
-    run_year = is_file_complete(Path(outdir, basicname + '.grib'), minimum_steps) 
+    check = is_file_complete(Path(outdir, basicname + '.grib'), minimum_steps)
 
-    if run_year:
+    if not check:
         for month in months:
 
             if request=='monthly':
