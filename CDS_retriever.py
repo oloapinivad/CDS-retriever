@@ -5,7 +5,7 @@ from pathlib import Path
 from pprint import pprint
 import datetime
 import cdsapi
-from cdo import Cdo
+from cdo import Cdo, CDOException
 
 cdo = Cdo()
 
@@ -38,7 +38,7 @@ def is_file_complete(filename, minimum_steps):
                 print(filename + ' is complete! Going to next one...')
                 return True
 
-        except KeyError:
+        except (KeyError, CDOException):
             print (filename + ' is corrupted')
             return False
 
@@ -56,7 +56,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
     # configuration part (level)
     level, level_kind = define_level(levelout)
     if dataset == 'ERA5':
-        kind = 'reanalysis-era5-' + level_kind 
+        kind = 'reanalysis-era5-' + level_kind
     elif dataset == 'ERA5-Land':
         kind = 'reanalysis-era5-land'
     else: 
