@@ -13,26 +13,26 @@ cdo = Cdo()
 def is_file_complete(filename, minimum_steps):
     filename = str(filename)
     try:
-        out = cdo.ntime(input=filename, options = '-s')
+        out = cdo.ntime(input=filename, options='-s')
         # this is an hack due to warning being reported by cdo into the output!
-        for n in out: 
-            if (len(n) <= 5):
-                nt = n  
-    except:
-        print (filename + ' is missing')
-        nt = 0 
+        for n in out:
+            if len(n) <= 5:
+                nt = n
+    except Exception:
+        print(filename + ' is missing')
+        nt = 0
 
-    if (int(nt) < minimum_steps) :
+    if int(nt) < minimum_steps:
         print('Need to retrieve ' + filename)
         retrieve = True
-    else :
+    else:
         print(filename + ' is complete! Going to next one...')
         retrieve = False
     return retrieve
 
     
 # big function for retrieval
-def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly'): 
+def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly'):
 
     # year for preliminary era5 reanalysis - now deprecated
     #year_preliminary = 1900
@@ -180,10 +180,14 @@ def year_convert(infile, outfile, debug = False) :
     cdo.copy(input = str(infile), output = str(outfile), options = '-t ecmwf -f nc4 -z zip --eccodes')
 
 # get the first and last year from files of a given folder
-def first_last_year(filepattern) :
+def first_last_year(filepattern, area='global'):
     filelist = glob.glob(str(filepattern))
-    first_year=str(sorted(filelist)[0].split('_')[-1].split('.')[0])
-    last_year=str(sorted(filelist)[-1].split('_')[-1].split('.')[0])
+    if area != 'global':
+        first_year=str(sorted(filelist)[0].split('_')[-5].split('.')[0])
+        last_year=str(sorted(filelist)[-1].split('_')[-5].split('.')[0])
+    else:
+        first_year=str(sorted(filelist)[0].split('_')[-1].split('.')[0])
+        last_year=str(sorted(filelist)[-1].split('_')[-1].split('.')[0])
     # monthly data
     if len(first_year)>4:
         first_year = first_year.split('-',maxsplit=1)[0]
