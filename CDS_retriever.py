@@ -48,7 +48,7 @@ def is_file_complete(filename, minimum_steps):
 
     
 # big function for retrieval
-def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly'): 
+def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly',max_attemps=5): 
 
     # year for preliminary era5 reanalysis - now deprecated
     #year_preliminary = 1900
@@ -114,16 +114,28 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             if area != 'global' :
                 retrieve_dict['area'] = area
 
-            pprint(kind)
-            pprint(level_kind)
-            pprint(retrieve_dict)
-            # run the API
+            #pprint(kind)
+            #pprint(level_kind)
+            #pprint(retrieve_dict)
+
+            # retrieve data
             c = cdsapi.Client()
-            c.retrieve(
-                kind,
-                retrieve_dict,
-                outfile)
-   
+            
+            RES = c.retrieve(
+                        kind,
+                        retrieve_dict,
+                        outfile
+                        )
+            
+            # Verify the downloaded files for completeness or errors, re-download if necessary           
+            for i in range(max_attemps):
+                if not is_file_complete(outfile):
+                    print(f"The downloaded file {outfile} is incomplete. Attempting to download again.")
+                    RES.download(outfile)
+                else:
+                    break
+
+
         # cat together the files and rmove the monthly ones
         if request == 'monthly':
             flist = str(Path(outdir, basicname + '??.grib'))
