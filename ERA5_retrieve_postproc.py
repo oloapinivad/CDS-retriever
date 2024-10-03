@@ -36,7 +36,9 @@ def main():
         config = load_config(args.config)
 
         # Print a description of the loaded configuration
+        print('*** Configuration ***\n')
         print_config(config)
+        print('\n*********************')
 
         # Translate the configuration on local variables
         tmpdir = config['tmpdir'] 
@@ -86,11 +88,14 @@ def main():
             # create list of years
             years = [str(i) for i in range(year1,year2+1)]
 
-            # define the out dir and file 
-            savedir =  Path(tmpdir, var)
-            print(f'Creating directory {savedir} if it does not exist')
-            Path(savedir).mkdir(parents=True, exist_ok=True)
-
+            # Create save dir if it does not exist. 
+            savedir =  Path(tmpdir) / var
+            if savedir.exist():
+                print(f"The directory {savedir} already exists, download new data there!")
+            else:
+                print(f'Creating new directory {savedir}.')
+                savedir.mkdir(parents=True)
+            
             # retrieve block
             if do_retrieve: 
 
