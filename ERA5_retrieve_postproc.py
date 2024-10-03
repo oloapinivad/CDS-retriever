@@ -88,7 +88,7 @@ def main():
 
             # Create save dir if it does not exist. 
             savedir =  Path(tmpdir) / var
-            if savedir.exist():
+            if savedir.exists():
                 print(f"The directory {savedir} already exists, download new data there!")
             else:
                 print(f'Creating new directory {savedir}.')
