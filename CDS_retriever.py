@@ -9,7 +9,7 @@ from cdo import Cdo, CDOException
 
 cdo = Cdo()
 
-# check with cdo is the file is complete (approximately correct)
+
 def is_file_complete(filename, minimum_steps):
     """
     Is a file that we want to download complete?
@@ -28,14 +28,14 @@ def is_file_complete(filename, minimum_steps):
         try:
             # cdo ntime return a list with the length of the timesteps, select the first one
             nt = int(cdo.ntime(input=filename, options = '-s')[0])
-            print(f'The file has {nt} timesteps...')
+            print(f'The file {filename} has {nt} timesteps...')
 
             # if the number of steps is not enough...
             if nt < minimum_steps:
                 print(f'The file {filename} looks incomplete with nsteps {nt} < {minimum_steps} minimum steps')
                 return False
             else:
-                print(filename + ' is complete! Going to next one...')
+                print(filename + ' is complete!')
                 return True
 
         except (KeyError, CDOException):
@@ -46,9 +46,13 @@ def is_file_complete(filename, minimum_steps):
     print (filename + ' is missing')
     return False
 
-    
-# big function for retrieval
-def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly',max_attemps=5): 
+
+def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly',max_attemps=5):
+    """
+    Retrieval function
+    """
+
+    print(f"Retrieve year {year}")
 
     # year for preliminary era5 reanalysis - now deprecated
     #year_preliminary = 1900
@@ -78,7 +82,11 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
     basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
     check = is_file_complete(Path(outdir, basicname + '.grib'), minimum_steps)
 
-    if not check:
+    if check:
+        print(f"{basicname} is already in {outdir} and is complete, skipping the retrieval...")
+    
+    else:
+        print(f"Retrieving data...")
         for month in months:
 
             if request=='monthly':
@@ -119,6 +127,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             #pprint(retrieve_dict)
 
             # retrieve data
+            print("Launching CDS API retrieval...")
             c = cdsapi.Client()
             
             RES = c.retrieve(
@@ -142,6 +151,8 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             cdo.cat(input = flist, output = str(Path(outdir, basicname + '.grib')))
             for f in glob.glob(flist):
                 os.remove(f)
+
+    return
 
 
 # define propertes for vertical levels

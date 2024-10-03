@@ -36,8 +36,8 @@ def print_config(conf_dict):
     """
     Print the configuration options
     """
-    
-    print('\n*** Configuration ***\n')
+
+    print('\n********** Configuration **********\n')
     
     print(f"Downloading files in {conf_dict['tmpdir']}") 
     print(f"Storing final files in {conf_dict['storedir']}")
@@ -59,7 +59,7 @@ def print_config(conf_dict):
     if conf_dict['do_align']:
         print('\t - Set a common time axis for monthly data')
 
-    print('\n*********************\n')
+    print('\n***********************************\n')
 
     return None
 

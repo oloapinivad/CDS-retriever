@@ -89,13 +89,15 @@ def main():
             # Create save dir if it does not exist. 
             savedir =  Path(tmpdir) / var
             if savedir.exists():
-                print(f"The directory {savedir} already exists, download new data there!")
+                print(f"The directory {savedir} already exists, download new data there!\n")
             else:
-                print(f'Creating new directory {savedir}.')
+                print(f'Creating new directory {savedir}.\n')
                 savedir.mkdir(parents=True)
             
             # retrieve block
-            if do_retrieve: 
+            if do_retrieve:
+
+                print("Starting data retrieval\n") 
 
                 # loop on the years create the parallel process
                 processes = []
