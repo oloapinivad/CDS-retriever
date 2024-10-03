@@ -37,7 +37,9 @@ def print_config(conf_dict):
     Print the configuration options
     """
     
-    print(f"\nDownloading files in {conf_dict['tmpdir']}") 
+    print('\n*** Configuration ***\n')
+    
+    print(f"Downloading files in {conf_dict['tmpdir']}") 
     print(f"Storing final files in {conf_dict['storedir']}")
     print(f"Downloading {conf_dict['varlist']} from {conf_dict['dataset']}")
     print(f"Data range: {conf_dict['year']['begin']}-{conf_dict['year']['end']}")
@@ -56,7 +58,8 @@ def print_config(conf_dict):
         print('\t - Postprocess data')
     if conf_dict['do_align']:
         print('\t - Set a common time axis for monthly data')
-    print()
+
+    print('\n*********************\n')
 
     return None
 

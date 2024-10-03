@@ -36,10 +36,8 @@ def main():
         config = load_config(args.config)
 
         # Print a description of the loaded configuration
-        print('*** Configuration ***\n')
         print_config(config)
-        print('\n*********************')
-
+        
         # Translate the configuration on local variables
         tmpdir = config['tmpdir'] 
         storedir = config['storedir'] 
