@@ -138,7 +138,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             
             # Verify the downloaded files for completeness or errors, re-download if necessary           
             for i in range(max_attemps):
-                if not is_file_complete(outfile):
+                if not is_file_complete(outfile,minimum_steps):
                     print(f"The downloaded file {outfile} is incomplete. Attempting to download again.")
                     RES.download(outfile)
                 else:
