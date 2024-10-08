@@ -72,7 +72,7 @@ freq = '1hr'
 #levelout='plev8'
 
 # for single pressure level vars
-levelout = '850hPa'
+levelout = '650'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS

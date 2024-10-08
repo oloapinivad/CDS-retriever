@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import re
 from pathlib import Path
 from pprint import pprint
 import datetime
@@ -53,8 +54,9 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
     # year for preliminary era5 reanalysis - now deprecated
     #year_preliminary = 1900
 
-    # configuration part (level)
+    # Level configuration
     level, level_kind = define_level(levelout)
+
     if dataset == 'ERA5':
         kind = 'reanalysis-era5-' + level_kind
     elif dataset == 'ERA5-Land':
@@ -132,26 +134,120 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 os.remove(f)
 
 
-# define propertes for vertical levels
+
+plevs = {'ERA5' : ['1000', '975', '950', '925',
+                    '900', '875', '850', '825',
+                    '800', '775', '750', '700',
+                    '650', '600', '550', '500',
+                    '450', '400', '350', '300',
+                    '250', '225', '200', '175',
+                    '150', '125', '100',  '70',
+                     '50',  '30',  '20',  '10',
+                      '7',   '5',   '3',   '2',
+                      '1'
+                ],
+        'plev8' : [  '10',  '50', '100', '250',
+                    '500', '700', '850','1000'
+                ],
+        'plev19': ['1000', '925', '850', '700',
+                    '600', '500', '400', '300',
+                    '250', '200', '150', '100',
+                     '70',  '50',  '30',  '20',
+                     '10',   '5',   '1'
+                ],
+        'plev37': [   '1',   '2',   '3',   '5',
+                      '7',  '10',  '20',  '30',
+                     '50',  '70', '100', '125',
+                    '150', '175', '200', '225',
+                    '250', '300', '350', '400',
+                    '450', '500', '550', '600',
+                    '650', '700', '750', '775',
+                    '800', '825', '850', '875',
+                    '900', '925', '950', '975',
+                    '1000'
+                ]
+}
+
+
+
+def validate_pressure_lev(levels):
+    """
+    Check if the requested pressure level(s) is (are) valid ERA5 pressure level(s).
+    
+    Parameters:
+        pressure_level (str or list of str): The pressure level(s) to be validated.
+        
+    Returns:
+        list: A list of validated ERA5 pressure levels ready for CDS API requests.
+    """
+
+    # Check if levels is one of the predefined options
+    if levels in ['plev8','plev19','plev37']:
+        return plevs[levels]
+    
+    RES = list()
+
+    pattern = r'^\d+(hPa)?$'
+
+    # Convert a single str in list for consistency
+    if isinstance(levels, str):
+        levels = [levels]
+
+    # Validate each level
+    for l in levels:
+
+        if re.match(pattern,l) and l.rstrip('hPa') in plevs['ERA5']:
+            
+            tmp = l.rstrip('hPa')
+            RES.append(tmp)
+
+        else:
+            raise ValueError(f'Invalid level specification: {l}! Aborting...')
+
+    return RES
+             
+
+
 def define_level(levelout):
+    """
+    Define properties for vertical levels based on the specified output level.
+
+    This function determines the type of vertical level (surface or
+    pressure levels) and validates the given pressure levels.
+
+    Parameters:
+        levelout (str or list of str): The output level. 
+                        Accepts 'sfc' for surface levels 
+                        or a (list of) string(s) for pressure levels.
+
+    Returns:
+        tuple: A tuple containing:
+            - level (str): The defined level, either 'sfc'
+                           or a (list of) validated pressure level(s).
+            - level_kind (str): A string indicating the type of level,
+                                either 'single-levels' for the surface level
+                                or 'pressure-levels' for pressure levels.
+
+    Raises:
+        ValueError: If the provided levelout is not a valid pressure level.
+    """
+    
     if levelout == 'sfc' :
+
         level_kind = 'single-levels'
         level = 'sfc'
-    else : 
+    else :
+
         level_kind = 'pressure-levels'
-        if levelout == 'plev8':
-            level= ['10','50','100','250','500','700','850','1000']
-        elif levelout == 'plev19':
-            level = ['1000','925','850','700','600','500','400','300','250',
-                     '200','150','100','70','50','30','20','10','5','1']
-        elif levelout == 'plev37':
-            level =  ['1', '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', 
-                      '125', '150', '175', '200', '225', '250', '300', '350', '400',
-                       '450', '500', '550', '600', '650', '700', '750', '775', '800',
-                        '825', '850', '875', '900', '925', '950', '975', '1000']
-        elif levelout == '500hPa' :
-            level = ['500']
+        try:
+            level = validate_pressure_lev(levelout)
+        except ValueError as e:
+            print(e)
+            sys.exit(1)
+
     return level, level_kind
+
+
 
 # define properties for time
 def define_time(freq) :
