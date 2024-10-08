@@ -24,10 +24,10 @@ cdo=Cdo()
 ######## -----   USER CONFIGURATION ------- ########
 
  # where data is downloaded
-tmpdir = '/scratch/b/b382076/era5'
+tmpdir = '/work_big/users/iotti'
 
 # where data is stored
-storedir = '/work/bb1153/b382076/ERA5'
+storedir = '/work_big/users/iotti'
 #storedir = '/work/scratch/users/paolo/era5/definitive'
 
 # which ERA dataset you want to download: only ERA5 and ERA5-Land available
@@ -36,14 +36,14 @@ dataset = 'ERA5'
 
 # the list of variables you want to retrieve  (CDS format)
 # please note they must share the same properties!
-varlist = ['top_net_solar_radiation', 'top_net_thermal_radiation', 'total_precipitation']
+varlist = ['relative_humidity']
 #varlist = 'evaporation'
 #var = '2m_temperature'
 
 # the years you need to retrieve
 # so far anythin before 1959 is calling the preliminary dataset
 year1 = 1940
-year2 = 2022
+year2 = 1941
 
 # option to extend current dataset
 # this will superseed the year1/year2 values
@@ -54,9 +54,9 @@ nprocs = 10
 
 #### - Frequency ---  ####
 # three different options, monthly get monthly means. 
-freq = 'mon'
+#freq = 'mon'
 #freq = '6hrs'
-#freq = '1hr'
+freq = '1hr'
 #freq = 'instant' #beware
 
 
@@ -64,7 +64,7 @@ freq = 'mon'
 # multiple options for surface levels and for pressure levels
 
 # for surface vars
-levelout = 'sfc' 
+#levelout = 'sfc' 
 
 # for plev variables
 #levelout='plev37'
@@ -72,7 +72,7 @@ levelout = 'sfc'
 #levelout='plev8'
 
 # for single pressure level vars
-#levelout = '500hPa'
+levelout = '850hPa'
 
 ##### - Grid selection ---- ####
 # any format that can be interpreted by CDS
@@ -95,8 +95,8 @@ download_request='yearly'
 
 #### - control for the structure --- ###
 do_retrieve = True # retrieve data from CDS
-do_postproc = True # postproc data with CDO
-do_align = True #set equal time axis to monthly data to work with Xarray
+do_postproc = False # postproc data with CDO
+do_align = False #set equal time axis to monthly data to work with Xarray
 
 ######## ----- END OF USER CONFIGURATION ------- ########
 
