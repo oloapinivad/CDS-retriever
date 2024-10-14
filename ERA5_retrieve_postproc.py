@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from cdo import Cdo
 import shutil
-from multiprocessing import Process
+from multiprocessing import Process, Pool
 import glob
 
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
@@ -127,23 +127,14 @@ for var in varlist:
 
     # retrieve block
     if do_retrieve: 
-
-        # loop on the years create the parallel process
-        processes = []
         yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
-        for lyears in yearlist:
-            for year in lyears : 
-                print(year)
-                p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout, 
-                                                        area, savedir, download_request))
-                p.start()
-                processes.append(p)
 
-            # wait for all the processes to end
-            for process in processes:
-                process.join()
+        with Pool(processes=nprocs) as pool:
+            for lyears in yearlist:
 
-    #  
+                args = [(dataset, var, freq, year, grid, levelout, area, savedir, download_request) for year in lyears]
+                pool.starmap(year_retrieve, args)
+  
     if do_postproc :
 
         cdo.debug=True
