@@ -24,10 +24,10 @@ cdo=Cdo()
 ######## -----   USER CONFIGURATION ------- ########
 
  # where data is downloaded
-tmpdir = '/scratch/b/b382076/era5'
+tmpdir = '/home/iotti/projects/CDS-retriever'
 
 # where data is stored
-storedir = '/work/bb1153/b382076/ERA5'
+storedir = '/home/iotti/projects/CDS-retriever'
 #storedir = '/work/scratch/users/paolo/era5/definitive'
 
 # which ERA dataset you want to download: only ERA5 and ERA5-Land available
@@ -36,7 +36,7 @@ dataset = 'ERA5'
 
 # the list of variables you want to retrieve  (CDS format)
 # please note they must share the same properties!
-varlist = ['top_net_solar_radiation', 'top_net_thermal_radiation', 'total_precipitation']
+varlist = ['top_net_solar_radiation']
 #varlist = 'evaporation'
 #var = '2m_temperature'
 
@@ -95,8 +95,8 @@ download_request='yearly'
 
 #### - control for the structure --- ###
 do_retrieve = True # retrieve data from CDS
-do_postproc = True # postproc data with CDO
-do_align = True #set equal time axis to monthly data to work with Xarray
+do_postproc = False # postproc data with CDO
+do_align = False #set equal time axis to monthly data to work with Xarray
 
 ######## ----- END OF USER CONFIGURATION ------- ########
 
@@ -128,12 +128,16 @@ for var in varlist:
     # retrieve block
     if do_retrieve: 
         yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+        try:
+            with Pool(processes=nprocs) as pool:
+                for lyears in yearlist:
+                    args = [(dataset, var, freq, year, grid, levelout, area, savedir, download_request) for year in lyears]
+                
+                    pool.starmap(year_retrieve, args)
+    
+        except Exception as e:
+            print(f"Execution stopped due to an error in a child process: {e}")
 
-        with Pool(processes=nprocs) as pool:
-            for lyears in yearlist:
-
-                args = [(dataset, var, freq, year, grid, levelout, area, savedir, download_request) for year in lyears]
-                pool.starmap(year_retrieve, args)
   
     if do_postproc :
 
