@@ -7,6 +7,7 @@ import datetime
 import cdsapi
 from cdo import Cdo, CDOException
 from urllib3.exceptions import IncompleteRead
+import time
 
 cdo = Cdo()
 
@@ -67,7 +68,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
         sys.exit('Unknown dataset!')
 
     # extract time information
-    product_type, day, time, time_kind, minimum_steps = define_time(freq)
+    product_type, day, t, time_kind, minimum_steps = define_time(freq)
     kind = kind + time_kind
 
     # set up the months loop
@@ -104,7 +105,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 'year': year,
                 'month': month,
                 'day': day,
-                'time': time,
+                'time': t,
             }
 
             if grid not in ['full']:
@@ -137,13 +138,20 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 
                 try:
                     RES.download(outfile)
+                    break
                 
                 except IncompleteRead as e:
-                    print(f"An IncompleteRead exception occurred: {e}\nRetrying the download (Attempt {attempt}/{max_attemps})")
-                    attempt += 1
-                    if attempt == max_attemps:
-                        raise MaxAttemptsError(f"Failed to download data for year {year} after {max_attemps} attempts")
-
+                    print((f"An IncompleteRead exception occurred: {e}"
+                           f"\nRetrying the download (Attempt {attempt}/{max_attempts})"))
+                except Exception as e:
+                    print((f"An unexpected error occurred: {e}"
+                           f"\nRetrying the download (Attempt {attempt}/{max_attempts})"))
+                    
+                time.sleep(5)
+                
+                if attempt == max_attempts:
+                    raise MaxAttemptsError((f"Failed to download data for year {year} "
+                                            f"after {max_attempts} attempts"))
 
         # cat together the files and rmove the monthly ones
         if request == 'monthly':
