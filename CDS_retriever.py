@@ -1,3 +1,5 @@
+"""CDS-retriever module"""
+
 import os
 import sys
 import glob
