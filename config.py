@@ -1,5 +1,7 @@
-import yaml
+"""Module for configuration of the parser"""
+
 import argparse
+import yaml
 
 
 def parser():
@@ -7,14 +9,14 @@ def parser():
     Command-line parser
     """
 
-    parser = argparse.ArgumentParser(description="Script for data retrieval and processing")
+    internal_parser = argparse.ArgumentParser(description="Script for data retrieval and processing")
 
-    parser.add_argument("-c", "--config", help="Path to the YAML configuration file")
-    parser.add_argument("-n", "--nprocs", type=int, help="Number of parallel processes")
-    parser.add_argument("-u", "--update", action="store_true", help="Update existing dataset")
+    internal_parser.add_argument("-c", "--config", help="Path to the YAML configuration file")
+    internal_parser.add_argument("-n", "--nprocs", type=int, help="Number of parallel processes")
+    internal_parser.add_argument("-u", "--update", action="store_true", help="Update existing dataset")
 
     # Parse the command-line arguments
-    return parser.parse_args()
+    return internal_parser.parse_args()
 
 
 def load_config(file_path):
@@ -23,7 +25,7 @@ def load_config(file_path):
     Returning configuration dict
     """
 
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='utf8') as file:
         try:
             config = yaml.safe_load(file)
             return config
@@ -36,8 +38,8 @@ def print_config(conf_dict):
     """
     Print the configuration options
     """
-    
-    print(f"\nDownloading files in {conf_dict['tmpdir']}") 
+
+    print(f"\nDownloading files in {conf_dict['tmpdir']}")
     print(f"Storing final files in {conf_dict['storedir']}")
     print(f"Downloading {conf_dict['varlist']} from {conf_dict['dataset']}")
     print(f"Data range: {conf_dict['year']['begin']}-{conf_dict['year']['end']}")
@@ -57,10 +59,3 @@ def print_config(conf_dict):
     if conf_dict['do_align']:
         print('\t - Set a common time axis for monthly data')
     print()
-
-    return None
-
-
-
-
-
