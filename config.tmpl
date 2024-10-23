@@ -1,0 +1,29 @@
+######## -----   USER CONFIGURATION ------- ########
+
+tmpdir : '/scratch/b/b382076/era5'    # download folder 
+storedir : '/work/bb1153/b382076/ERA5'   # store folder 
+
+dataset : 'ERA5'    # Available options: 'ERA5', 'ERA5-Land'
+varlist: ['top_net_solar_radiation', 'top_net_thermal_radiation', 'total_precipitation']    # Variables must share the same properties!
+year :
+  begin : 1940
+  end : 2022
+  update : False    # Option to extend current dataset. This will supersede the year1/year2 values
+ 
+freq : 'mon'    # Data frequency. Available options: 'instant', '1hr', '6hrs', 'mon'.
+                # Beware of 'instant'. 'mon' gets monthly means.
+levelout : 'sfc'    # Vertical levels. Available option: 'sfc', 'plev37', 'plev19', 'plev8'.
+                    # For single pressure level vars levelout = '500hPa'.
+grid : 'full'    # Grid selection. Available options: 'full', '0.1x0.1', '0.25x0.25', '2.5x2.5'.
+                 # 'full' = no choiche is made, i.e. the original grid is provided
+area : 'global'    # Either 'global' or a list of coordinates in the North, West, South, East order (e.g. [65, -15, 25, 45])
+
+nprocs : 10    # Number of parallel processes
+
+download_request : 'yearly'    # Download yearly chunks or monthly chunks
+
+#### - control for the structure --- ###
+do_retrieve : True    # Retrieve data from CDS
+do_postproc : True    # Postproc data with CDO
+do_align : True    # Set equal time axis to monthly data to work with Xarray
+
