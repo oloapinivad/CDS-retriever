@@ -8,11 +8,12 @@ You can configure the `ERA5_retrieve_postproc.py` script (no command line interf
 It is recommended to run it under conda to do not mess with dependencies
 
 ```
-conda create -n CDS python=3.9
-conda install -n CDS -c conda-forge cdo python-cdo cdsapi netcdf4 xarray
+conda env create -f environnment.yaml -n CDS
 conda activate CDS
-./ERA5_retrieve_postproc.py
+./ERA5_retrieve_postproc.py -c config.yaml -n 2
 ```
+
+This will run with 2 processors the predefined configuration from `config.yaml`. Please modify the `config.tmpl` according to your needs
 
 You can configure:
 - Temporary and storage directories: `tmpdir` and `storedir`
