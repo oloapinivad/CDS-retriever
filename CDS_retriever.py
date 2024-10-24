@@ -7,8 +7,14 @@ from pathlib import Path
 import datetime
 import cdsapi
 from cdo import Cdo, CDOException
+from urllib3.exceptions import IncompleteRead
+import time
+
 cdo = Cdo()
 
+
+class MaxAttemptsError(Exception):
+    pass
 
 # check with cdo is the file is complete (approximately correct)
 def is_file_complete(filename, minimum_steps):
@@ -48,8 +54,10 @@ def is_file_complete(filename, minimum_steps):
     return False
 
 # big function for retrieval
-def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request='yearly'):
-    """Function to download a single year of a ERA5 dataset"""
+def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request = 'yearly',max_attemps=5): 
+
+    # year for preliminary era5 reanalysis - now deprecated
+    #year_preliminary = 1900
 
     # configuration part (level)
     level, level_kind = define_level(levelout)
@@ -61,7 +69,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
         raise ValueError(f'Unknown dataset {dataset} requested')
 
     # extract time information
-    product_type, day, time, time_kind, minimum_steps = define_time(freq)
+    product_type, day, t, time_kind, minimum_steps = define_time(freq)
     kind = kind + time_kind
 
     # set up the months loop
@@ -100,7 +108,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 'year': year,
                 'month': month,
                 'day': day,
-                'time': time,
+                'time': t,
             }
 
             if grid not in ['full']:
@@ -114,15 +122,39 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
             if area != 'global':
                 retrieve_dict['area'] = area
 
-            # pprint(kind)
-            # pprint(level_kind)
-            # pprint(retrieve_dict)
-            # run the API
+            #pprint(kind)
+            #pprint(level_kind)
+            #pprint(retrieve_dict)
+
+            #retrieve data
             c = cdsapi.Client()
-            c.retrieve(
-                kind,
-                retrieve_dict,
-                outfile)
+            
+            RES = c.retrieve(
+                        kind,
+                        retrieve_dict,
+                        )
+            
+            #download data
+            attempt = 0
+
+            while attempt < max_attemps:
+                
+                try:
+                    RES.download(outfile)
+                    break
+                
+                except IncompleteRead as e:
+                    print((f"An IncompleteRead exception occurred: {e}"
+                           f"\nRetrying the download (Attempt {attempt}/{max_attempts})"))
+                except Exception as e:
+                    print((f"An unexpected error occurred: {e}"
+                           f"\nRetrying the download (Attempt {attempt}/{max_attempts})"))
+                    
+                time.sleep(5)
+                
+                if attempt == max_attempts:
+                    raise MaxAttemptsError((f"Failed to download data for year {year} "
+                                            f"after {max_attempts} attempts"))
 
         # cat together the files and rmove the monthly ones
         if request == 'monthly':
