@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from cdo import Cdo
 import shutil
-from multiprocessing import Process
+from multiprocessing import Process, Pool
 import glob
 
 from CDS_retriever import year_retrieve, year_convert, create_filename, first_last_year, which_new_years_download
@@ -89,27 +89,21 @@ def main():
             print(f'Creating directory {savedir} if it does not exist')
             Path(savedir).mkdir(parents=True, exist_ok=True)
 
-            # retrieve block
-            if do_retrieve:
-
-                # loop on the years create the parallel process
-                processes = []
-                yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+    # retrieve block
+    if do_retrieve: 
+        yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+        try:
+            with Pool(processes=nprocs) as pool:
                 for lyears in yearlist:
-                    print(f"Working on years {lyears}\n")
-                    for year in lyears:
-                        # print(year)
-                        p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout,
-                                                                area, savedir, download_request))
-                        p.start()
-                        processes.append(p)
+                    args = [(dataset, var, freq, year, grid, levelout, area, savedir, download_request) for year in lyears]
+                
+                    pool.starmap(year_retrieve, args)
+    
+        except Exception as e:
+            print(f"Execution stopped due to an error in a child process: {e}")
 
-                    # wait for all the processes to end
-                    for process in processes:
-                        process.join()
-
-            #
-            if do_postproc:
+  
+    if do_postproc :
 
                 cdo.debug = True
 
