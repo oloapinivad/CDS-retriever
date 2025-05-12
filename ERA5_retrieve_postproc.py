@@ -73,7 +73,7 @@ def main():
             if update:
                 print("Update flag is true, detection of years...")
                 year1, year2 = which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
-                print(year1, year2)
+                print(f"Download from {year1} to {year2}")
                 if year1 > year2:
                     print('Everything you want has been already downloaded, disabling retrieve...')
                     do_retrieve = False
@@ -98,7 +98,6 @@ def main():
                 for lyears in yearlist:
                     print(f"Working on years {lyears}\n")
                     for year in lyears:
-                        # print(year)
                         p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout,
                                                                 area, savedir, download_request))
                         p.start()
@@ -114,7 +113,7 @@ def main():
                 cdo.debug = True
 
                 print('Running postproc...')
-                destdir = Path(storedir, freq)
+                destdir = Path(storedir, var, freq)
                 Path(destdir).mkdir(parents=True, exist_ok=True)
 
                 # loop on the years create the parallel process for a fast conversion
@@ -126,6 +125,7 @@ def main():
                         filename = create_filename(dataset, var, freq, grid, levelout, area, year)
                         infile = Path(savedir, filename + '.grib')
                         outfile = Path(destdir, filename + '.nc')
+                        print(f'Converting {infile} to {outfile}')
                         p = Process(target=year_convert, args=(infile, outfile))
                         # p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
                         p.start()
@@ -187,6 +187,7 @@ def main():
 
                     dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid,
                                   levelout, area, first_year + '-' + last_year) + '.nc'))
+                    print(f'Creating daily file {dayfile}...')
                     # monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
 
                     if os.path.exists(dayfile):

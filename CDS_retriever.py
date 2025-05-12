@@ -118,7 +118,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
 
             # pprint(kind)
             # pprint(level_kind)
-            # pprint(retrieve_dict)
+            print(retrieve_dict)
             # run the API
             c = cdsapi.Client()
             c.retrieve(
@@ -267,9 +267,10 @@ def define_time(freq):
         if freq == '6hrs':
             time = [str(i).zfill(2)+':00' for i in range(0, 24, 6)]
             minimum_steps = 365*4
-        # 1hr case
-        time = [str(i).zfill(2)+':00' for i in range(0, 24)]
-        minimum_steps = 365*24
+        else:
+            # 1hr case
+            time = [str(i).zfill(2)+':00' for i in range(0, 24)]
+            minimum_steps = 365*24
     elif freq == 'instant':
         product_type = 'reanalysis'
         time_kind = ''
