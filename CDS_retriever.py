@@ -320,6 +320,7 @@ def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
     destdir = Path(storedir, var, freq)
     filepattern = Path(destdir, create_filename(dataset, var, freq, grid,
                                                 levelout, area, '????', '????') + '.nc')
+    print(filepattern)
     _, year1 = first_last_year(filepattern)
     year1 = int(year1) + 1
     year2 = datetime.datetime.now().year - 1
