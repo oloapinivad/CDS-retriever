@@ -14,6 +14,10 @@ def parser():
     internal_parser.add_argument("-c", "--config", help="Path to the YAML configuration file")
     internal_parser.add_argument("-n", "--nprocs", type=int, help="Number of parallel processes")
     internal_parser.add_argument("-u", "--update", action="store_true", help="Update existing dataset")
+    internal_parser.add_argument("-v", "--variable", type=str, help="Pick a specific variable")
+    internal_parser.add_argument("-l", "--levelout", type=str, help="Pick a specific levle")
+    internal_parser.add_argument("--outputdir", type=str, help="Outputdir")
+    internal_parser.add_argument("--tmpdir", type=str, help="Tmpdir")
 
     # Parse the command-line arguments
     return internal_parser.parse_args()

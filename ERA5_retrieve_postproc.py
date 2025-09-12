@@ -63,6 +63,17 @@ def main():
         if args.update:
             print(f"Overriding YAML update ({config['year']['update']}) with command-line arg ({args.update})")
             update = args.update
+        if args.variable:
+            print(f"Overriding YAML variable ({config['varlist']}) with command-line arg ({args.variable})")
+            varlist = [args.variable]
+        if args.levelout:
+            print(f"Overriding YAML variable ({config['levelout']}) with command-line arg ({args.levelout})")
+            levelout = args.levelout
+        if args.outputdir:
+            storedir = args.outputdir
+        if args.tmpdir:
+            tmpdir = args.tmpdir
+
 
         # safecheck
         if isinstance(varlist, str):
@@ -142,6 +153,7 @@ def main():
                     print('Extra processing for monthly...')
 
                     filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
+                    print(filepattern)
                     first_year, last_year = first_last_year(filepattern)
 
                     if update:
@@ -162,8 +174,11 @@ def main():
                     cdo.cat(input=filepattern, output=mergefile, options='-f nc4 -z zip')
                     if isinstance(filepattern, str):
                         loop = glob.glob(filepattern)
-                        for f in loop:
-                            os.remove(f)
+                    else:
+                        loop = filepattern
+                    print(loop)
+                    for f in loop:
+                        os.remove(f)
 
                     # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading
                     if do_align:
