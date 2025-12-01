@@ -13,7 +13,8 @@ year :
 freq : 'mon'    # Data frequency. Available options: 'instant', '1hr', '6hrs', 'mon'.
                 # Beware of 'instant'. 'mon' gets monthly means.
 levelout : 'sfc'    # Vertical levels. Available option: 'sfc', 'plev37', 'plev19', 'plev8'.
-                    # For single pressure level vars levelout = '500hPa'.
+                    # For specific pressure level(s) levelout = '500hPa',
+                    # or list, e.g. levelout = ['500hPa', '700hPa', '850hPa'].
 grid : 'full'    # Grid selection. Available options: 'full', '0.1x0.1', '0.25x0.25', '2.5x2.5'.
                  # 'full' = no choiche is made, i.e. the original grid is provided
 area : 'global'    # Either 'global' or a list of coordinates in the North, West, South, East order (e.g. [65, -15, 25, 45])

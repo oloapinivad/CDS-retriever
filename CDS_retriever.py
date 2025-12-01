@@ -8,6 +8,8 @@ from pathlib import Path
 import datetime
 import cdsapi
 from cdo import Cdo, CDOException
+from config import validate_levelout_get_unit
+
 cdo = Cdo()
 
 
@@ -282,16 +284,52 @@ def define_time(freq):
 
     return product_type, day, time, time_kind, minimum_steps
 
-# create filename function
+
+
 def create_filename(dataset, var, freq, grid, levelout, area, year1, year2=None):
-    """Create the final output file"""
+    """
+    Generate a filename based on the provided parameters.
+
+    Parameters:
+        dataset (str): The name of the dataset.
+        var (str): The variable name.
+        freq (str): The temporal frequency of the data ('instant', '1hr', '6hrs', 'mon'.).
+        grid (str): The grid specification ('full', '0.1x0.1', '0.25x0.25', '2.5x2.5'.).
+        levelout (str or list of str): The pressure levels, either as a single string 
+            (e.g., '500hPa') or a list of strings (e.g., ['500hPa', '700hPa']).
+            If the `levelout` is a list of pressure levels 'hPa' will be stripped 
+            from individual levels and appended to the final concatenated string.
+        area (str or list of str): The geographic area. If 'global', no area is added to the filename.
+            If a list of coordinates in the North, West, South, East order
+            is provided, it will be joined by underscores.
+        year1 (str): The starting year.
+        year2 (str, optional): The ending year.
+
+    Returns:
+        str: The generated filename following the convention:
+            `<dataset>_<var>_<freq>_<grid>_<levelout>_<year1>[-<year2>]_[area]`.
+
+    """
+
+    unit = validate_levelout_get_unit(levelout)
+
+    # Format levelout properly if it is provided as a list
+    if isinstance(levelout,list):
+        cleaned_levels = [level.replace('hPa', '') for level in levelout]
+        levelout = '-'.join(cleaned_levels) + unit
+
+    # Generate the base filename
     filename = dataset + '_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year1
+    
     if (freq == 'mon') and (year2 is not None):
         filename = filename + '-' + year2
     if area != 'global':
         strarea = "_".join([str(x) for x in area])
         filename = filename + '_' + strarea
+
     return filename
+
+
 
 # wrapper for simple parallel function for conversion to netcdf
 def year_convert(infile, outfile, debug=False):
