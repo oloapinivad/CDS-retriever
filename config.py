@@ -12,7 +12,7 @@ def parser():
     internal_parser = argparse.ArgumentParser(description="Script for data retrieval and processing")
 
     internal_parser.add_argument("-c", "--config", help="Path to the YAML configuration file")
-    internal_parser.add_argument("-n", "--nprocs", type=int, help="Number of parallel processes")
+    internal_parser.add_argument("-n", "--n_years", type=int, help="Number of years for each download block")
     internal_parser.add_argument("-u", "--update", action="store_true", help="Update existing dataset")
     internal_parser.add_argument("-v", "--variable", type=str, help="Pick a specific variable")
     internal_parser.add_argument("-l", "--levelout", type=str, help="Pick a specific levle")
@@ -53,7 +53,7 @@ def print_config(conf_dict):
     print(f"Data frequency: {conf_dict['freq']}")
     print(f"Grid selection: {conf_dict['grid']}")
     print(f"Area: {conf_dict['area']}")
-    print(f"Number of parallel processes: {conf_dict['nprocs']}")
+    print(f"Number of years for each download block: {conf_dict['n_years']}")
     print(f"Download {conf_dict['download_request']} chunks")
     print('Actions:')
     if conf_dict['do_retrieve']:

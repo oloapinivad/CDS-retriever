@@ -50,16 +50,16 @@ def main():
         levelout = config['levelout']
         grid = config['grid']
         area = config['area']
-        nprocs = config['nprocs']
+        n_years = config['n_years']
         download_request = config['download_request']
         do_retrieve = config['do_retrieve']
         do_postproc = config['do_postproc']
         do_align = config['do_align']
 
         # Override config with command line args
-        if args.nprocs:
-            print(f"Overriding YAML nprocs ({config['nprocs']}) with command-line arg ({args.nprocs})")
-            nprocs = args.nprocs
+        if args.n_years:
+            print(f"Overriding YAML nprocs ({config['n_years']}) with command-line arg ({args.n_years})")
+            n_years = args.n_years
         if args.update:
             print(f"Overriding YAML update ({config['year']['update']}) with command-line arg ({args.update})")
             update = args.update
@@ -105,18 +105,17 @@ def main():
 
                 # loop on the years create the parallel process
                 processes = []
-                yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+                yearlist = [years[i:i + n_years] for i in range(0, len(years), n_years)]
                 for lyears in yearlist:
                     print(f"Working on years {lyears}\n")
-                    for year in lyears:
-                        p = Process(target=year_retrieve, args=(dataset, var, freq, year, grid, levelout,
-                                                                area, savedir, download_request))
-                        p.start()
-                        processes.append(p)
+                    p = Process(target=year_retrieve, args=(dataset, var, freq, lyears, grid, levelout,
+                                                            area, savedir, download_request))
+                    p.start()
+                    processes.append(p)
 
-                    # wait for all the processes to end
-                    for process in processes:
-                        process.join()
+                # wait for all the processes to end
+                for process in processes:
+                    process.join()
 
             #
             if do_postproc:
@@ -129,31 +128,29 @@ def main():
 
                 # loop on the years create the parallel process for a fast conversion
                 processes = []
-                yearlist = [years[i:i + nprocs] for i in range(0, len(years), nprocs)]
+                yearlist = [years[i:i + n_years] for i in range(0, len(years), n_years)]
                 for lyears in yearlist:
-                    for year in lyears:
-                        print('Conversion of ' + year)
-                        filename = create_filename(dataset, var, freq, grid, levelout, area, year)
-                        infile = Path(savedir, filename + '.grib')
-                        outfile = Path(destdir, filename + '.nc')
-                        print(f'Converting {infile} to {outfile}')
-                        p = Process(target=year_convert, args=(infile, outfile))
-                        # p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
-                        p.start()
-                        processes.append(p)
+                    print('Conversion of ' + str(lyears))
+                    filename = create_filename(dataset, var, freq, grid, levelout, area, lyears[0], lyears[-1])
+                    infile = Path(savedir, filename + '.grib')
+                    outfile = Path(destdir, filename + '.nc')
+                    print(f'Converting {infile} to {outfile}')
+                    p = Process(target=year_convert, args=(infile, outfile))
+                    # p = Process(target=cdo.copy, args=(infile, outfile, '-f nc4 -z zip'))
+                    p.start()
+                    processes.append(p)
 
-                    # wait for all the processes to end
-                    for process in processes:
-                        process.join()
+                # wait for all the processes to end
+                for process in processes:
+                    process.join()
 
-                    print('Conversion complete!')
+                print('Conversion complete!')
 
                 # extra processing for monthly data
                 if freq == "mon":
                     print('Extra processing for monthly...')
 
-                    filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
-                    print(filepattern)
+                    filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc'))
                     first_year, last_year = first_last_year(filepattern)
 
                     if update:
@@ -165,7 +162,7 @@ def main():
                         filepattern = filebase + glob.glob(filepattern)
 
                     mergefile = str(Path(destdir, create_filename(dataset, var, freq, grid,
-                                    levelout, area, first_year + '-' + last_year) + '.nc'))
+                                    levelout, area, first_year, last_year) + '.nc'))
                     print(mergefile)
                     if os.path.exists(mergefile):
                         print(f'Removing existing file {mergefile}...')
@@ -178,7 +175,8 @@ def main():
                         loop = filepattern
                     print(loop)
                     for f in loop:
-                        os.remove(f)
+                        if f != mergefile:
+                            os.remove(f)
 
                     # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading
                     if do_align:
@@ -197,11 +195,11 @@ def main():
                     Path(daydir).mkdir(parents=True, exist_ok=True)
                     Path(mondir).mkdir(parents=True, exist_ok=True)
 
-                    filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc')
+                    filepattern = Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????', '????') + '.nc')
                     first_year, last_year = first_last_year(filepattern)
 
                     dayfile = str(Path(daydir, create_filename(dataset, var, 'day', grid,
-                                  levelout, area, first_year + '-' + last_year) + '.nc'))
+                                  levelout, area, first_year, last_year) + '.nc'))
                     print(f'Creating daily file {dayfile}...')
                     # monfile = str(Path(mondir, create_filename(var, 'mon', grid, levelout, area, first_year + '-' + last_year) + '.nc'))
 
