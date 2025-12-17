@@ -42,6 +42,7 @@ def main():
         tmpdir = config['tmpdir']
         storedir = config['storedir']
         dataset = config['dataset']
+        product_type = config['product_type']
         varlist = config['varlist']
         year1 = config['year']['begin']
         year2 = config['year']['end']
@@ -108,7 +109,7 @@ def main():
                 yearlist = [years[i:i + n_years] for i in range(0, len(years), n_years)]
                 for lyears in yearlist:
                     print(f"Working on years {lyears}\n")
-                    p = Process(target=year_retrieve, args=(dataset, var, freq, lyears, grid, levelout,
+                    p = Process(target=year_retrieve, args=(dataset, product_type, var, freq, lyears, grid, levelout,
                                                             area, savedir, download_request))
                     p.start()
                     processes.append(p)
@@ -190,7 +191,7 @@ def main():
 
                 # extra processing for daily data
                 else:
-                    print('Extra processing for daily and 6hrs...')
+                    print('Extra processing for daily and 3/6 hrs...')
                     daydir, mondir = [Path(storedir, var, x) for x in ['day', 'mon']]
                     Path(daydir).mkdir(parents=True, exist_ok=True)
                     Path(mondir).mkdir(parents=True, exist_ok=True)

@@ -49,7 +49,7 @@ def is_file_complete(filename, minimum_steps):
     return False
 
 # big function for retrieval
-def year_retrieve(dataset, var, freq, years_list, grid, levelout, area, outdir, request='yearly'):
+def year_retrieve(dataset, product_type, var, freq, years_list, grid, levelout, area, outdir, request='yearly'):
     """Function to download a single year of a ERA5 dataset"""
 
     # Level configuration
@@ -63,8 +63,10 @@ def year_retrieve(dataset, var, freq, years_list, grid, levelout, area, outdir, 
         raise ValueError(f'Unknown dataset {dataset} requested')
 
     # extract time information
-    product_type, day, time, time_kind, minimum_steps = define_time(freq, len(years_list))
+    product_type_by_freq, day, time, time_kind, minimum_steps = define_time(freq, len(years_list))
     kind = kind + time_kind
+    if product_type == 'reanalysis':
+        product_type = product_type_by_freq
 
     # set up the months loop
     if request == 'yearly':
@@ -260,13 +262,16 @@ def define_time(freq, n_years=1):
         product_type = 'monthly_averaged_reanalysis'
         time_kind = '-monthly-means'
         minimum_steps = n_years * 12
-    elif freq in ['1hr', '6hrs']:
+    elif freq in ['1hr', '3hrs', '6hrs']:
         product_type = 'reanalysis'
         time_kind = ''
         day = [str(i).zfill(2) for i in range(1, 31+1)]
         if freq == '6hrs':
             time = [str(i).zfill(2)+':00' for i in range(0, 24, 6)]
             minimum_steps = n_years * 365 * 4
+        elif freq == '3hrs':
+            time = [str(i).zfill(2)+':00' for i in range(0, 24, 3)]
+            minimum_steps = n_years * 365 * 8
         else:
             # 1hr case
             time = [str(i).zfill(2)+':00' for i in range(0, 24)]
