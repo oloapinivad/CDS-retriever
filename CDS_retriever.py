@@ -298,7 +298,7 @@ def year_convert(infile, outfile, debug=False):
     """Convert with cdo the grib to netcdf4 zip"""
     cdo.debug = debug
     cdo.copy(input=str(infile), output=str(outfile),
-             options='-t ecmwf -f nc4 -z zip --eccodes')
+             options='-f nc4 -z zip --eccodes')
 
 # get the first and last year from files of a given folder
 def first_last_year(filepattern):

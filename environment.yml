@@ -3,8 +3,9 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python=3.12
-  - cdsapi=0.7
-  - python-cdo=1.6
-  - pyyaml=6.0
+  - python<3.14
+  - cdsapi
+  - python-cdo
+  - pyyaml
+  - eccodes>=2.41.0
   
