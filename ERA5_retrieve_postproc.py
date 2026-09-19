@@ -148,9 +148,24 @@ def main():
 
                     print('Conversion complete!')
 
+
                 # extra processing for monthly data
                 if freq == "mon":
                     print('Extra processing for monthly...')
+
+                    # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading
+                    if do_align:
+                        for lyears in yearlist:
+                            for year in lyears:
+                                print('Alignement of ' + year)
+                                filename = create_filename(dataset, var, freq, grid, levelout, area, year) + '.nc'
+                                first_time = cdo.showtime(input=f'-seltimestep,1 {filename}')[0]
+                                if first_time != '00:00:00':
+                                    print('Aligningment required...')
+                                    tempfile = str(Path(tmpdir, 'temp_align.nc'))
+                                    shutil.move(filename, tempfile)
+                                    cdo.shifttime('-6hours', input=tempfile, output=filename, options='-f nc4 -z zip')
+                                    os.remove(tempfile)
 
                     filepattern = str(Path(destdir, create_filename(dataset, var, freq, grid, levelout, area, '????') + '.nc'))
                     print(filepattern)
@@ -179,16 +194,6 @@ def main():
                     print(loop)
                     for f in loop:
                         os.remove(f)
-
-                    # HACK: set a common time axis for monthly data (roll back cumulated by 6hours). useful for catalog xarray loading
-                    if do_align:
-                        print('Aligningment required...')
-                        first_time = cdo.showtime(input=f'-seltimestep,1 {mergefile}')[0]
-                        if first_time != '00:00:00':
-                            tempfile = str(Path(tmpdir, 'temp_align.nc'))
-                            shutil.move(mergefile, tempfile)
-                            cdo.shifttime('-6hours', input=tempfile, output=mergefile, options='-f nc4 -z zip')
-                            os.remove(tempfile)
 
                 # extra processing for daily data
                 else:
