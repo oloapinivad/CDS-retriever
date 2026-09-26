@@ -49,7 +49,7 @@ def is_file_complete(filename, minimum_steps):
     return False
 
 # big function for retrieval
-def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, request='yearly'):
+def year_retrieve(dataset, product_type, var, freq, years_list, grid, levelout, area, outdir, request='yearly'):
     """Function to download a single year of a ERA5 dataset"""
 
     # Level configuration
@@ -63,8 +63,10 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
         raise ValueError(f'Unknown dataset {dataset} requested')
 
     # extract time information
-    product_type, day, time, time_kind, minimum_steps = define_time(freq)
+    product_type_by_freq, day, time, time_kind, minimum_steps = define_time(freq, len(years_list))
     kind = kind + time_kind
+    if product_type == 'reanalysis':
+        product_type = product_type_by_freq
 
     # set up the months loop
     if request == 'yearly':
@@ -75,7 +77,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
         sys.exit('Wrong download request!')
 
     # check if yearly file is complete
-    basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
+    basicname = create_filename(dataset, var, freq, grid, levelout, area, years_list[0], years_list[-1])
     check = is_file_complete(Path(outdir, basicname + '.grib'), minimum_steps)
 
     if not check:
@@ -99,7 +101,7 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir, reques
                 'product_type': product_type,
                 'format': 'grib',
                 'variable': var,
-                'year': year,
+                'year': years_list,
                 'month': month,
                 'day': day,
                 'time': time,
@@ -252,42 +254,43 @@ def define_level(levelout):
 # define properties for time
 
 
-def define_time(freq):
+def define_time(freq, n_years=1):
     """Define time frequency and provide the different request options"""
     if freq == 'mon':
         time = ['00:00']
         day = ['01']
         product_type = 'monthly_averaged_reanalysis'
         time_kind = '-monthly-means'
-        minimum_steps = 12
-    elif freq in ['1hr', '6hrs']:
+        minimum_steps = n_years * 12
+    elif freq in ['1hr', '3hrs', '6hrs']:
         product_type = 'reanalysis'
         time_kind = ''
         day = [str(i).zfill(2) for i in range(1, 31+1)]
         if freq == '6hrs':
             time = [str(i).zfill(2)+':00' for i in range(0, 24, 6)]
-            minimum_steps = 365*4
+            minimum_steps = n_years * 365 * 4
+        elif freq == '3hrs':
+            time = [str(i).zfill(2)+':00' for i in range(0, 24, 3)]
+            minimum_steps = n_years * 365 * 8
         else:
             # 1hr case
             time = [str(i).zfill(2)+':00' for i in range(0, 24)]
-            minimum_steps = 365*24
+            minimum_steps = n_years * 365 * 24
     elif freq == 'instant':
         product_type = 'reanalysis'
         time_kind = ''
         day = ['01']
         time = ['00:00']
-        minimum_steps = 12
+        minimum_steps = n_years * 12
     else:
         raise ValueError(f'Unknown frequency {freq} requested')
 
     return product_type, day, time, time_kind, minimum_steps
 
 # create filename function
-def create_filename(dataset, var, freq, grid, levelout, area, year1, year2=None):
+def create_filename(dataset, var, freq, grid, levelout, area, first_year, last_year):
     """Create the final output file"""
-    filename = dataset + '_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + year1
-    if (freq == 'mon') and (year2 is not None):
-        filename = filename + '-' + year2
+    filename = dataset + '_' + var + '_' + freq + '_' + grid + '_' + levelout + '_' + first_year + '-' + last_year
     if area != 'global':
         strarea = "_".join([str(x) for x in area])
         filename = filename + '_' + strarea
@@ -302,16 +305,24 @@ def year_convert(infile, outfile, debug=False):
 
 # get the first and last year from files of a given folder
 def first_last_year(filepattern):
-    """Get the first and last of files in a defined folder so that we can update if necessary"""
-    filelist = glob.glob(str(filepattern))
-    first_year = str(sorted(filelist)[0].split('_')[-1].split('.')[0])
-    last_year = str(sorted(filelist)[-1].split('_')[-1].split('.')[0])
-    # monthly data
-    if len(first_year) > 4:
-        first_year = first_year.split('-', maxsplit=1)[0]
-    if len(last_year) > 4:
-        last_year = last_year.split('-')[1]
-    return first_year, last_year
+    filelist = sorted(glob.glob(str(filepattern)))
+    years = []
+
+    for f in filelist:
+        filename = Path(f).name
+        core = filename.split('_')
+        # search for the only part with a "-" and two numbers of 4 digits
+        for part in core:
+            if '-' in part:
+                part_clean = part.split('.')[0]  # remove .nc extension
+                a, b = part_clean.split('-', 1)
+                if len(a) == 4 and len(b) == 4 and a.isdigit() and b.isdigit():
+                    years.append((int(a), int(b)))
+                    break
+
+    first_year = years[0][0]
+    last_year = years[-1][1]
+    return str(first_year), str(last_year)
 
 # for autosearch of the missing years
 def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area):
