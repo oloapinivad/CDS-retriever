@@ -17,6 +17,7 @@ It is built on top of:
 - Request size is checked with the CDS cost estimate: with `download_request: auto` yearly requests
   are used when allowed, otherwise the year is split in monthly requests
   (e.g. hourly data on 37 pressure levels exceed the CDS limit for a single year).
+  Monthly requests are run in parallel as independent (year, month) jobs and then concatenated per year.
 - Failed requests are retried; files are written atomically and checked for completeness, so
   interrupted runs can be safely restarted and already downloaded files are skipped.
 - Errors in the parallel workers are reported and the program exits with a non-zero status.
@@ -104,7 +105,7 @@ the **command-line argument takes precedence.**
 | `levelout`           | `str`/`list[str]`   | Vertical level selection. Options: **`'sfc'`** (default), **`'plev37'`**, **`'plev19'`**, **`'plev8'`**, a single level (e.g. **`'500hPa'`**) or a list of levels (e.g. **`['500hPa', '850hPa']`**). |
 | `grid`               | `str`               | Output grid resolution. Options: **`'full'`** (default, native grid), **`'0.1x0.1'`**, **`'0.25x0.25'`**, **`'0.5x0.5'`**, **`'1x1'`**, **`'2.5x2.5'`**. |
 | `area`               | `str`/`list[float]` | Geographic area for download. Either **`'global'`** or a list of coordinates `[North, West, South, East]`, e.g., `[65, -15, 25, 45]`. |
-| `nprocs`             | `int`               | Number of parallel processes (default 4).                                          |
+| `nprocs`             | `int`               | Number of parallel processes (default 4), i.e. the maximum number of simultaneous CDS requests. Each job is a year, or a single month with monthly requests. Keep it moderate, since the CDS limits the queued requests per user. |
 | `download_request`   | `str`               | Chunking mode for retrieval. Options: **`'auto'`** (default), **`'yearly'`**, **`'monthly'`**. |
 | `retries`            | `int`               | Attempts for each request before giving up (default 3).                            |
 | `check_request`      | `bool`              | Validate requests against the CDS catalogue before downloading (default **`True`**). |

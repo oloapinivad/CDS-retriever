@@ -96,51 +96,108 @@ def download(dataset, request, target, retries=3, wait=60, client=None):
     return target
 
 
+def year_file(outdir, dataset, var, freq, grid, levelout, area, year):
+    """Path of the yearly GRIB file"""
+    return Path(outdir, create_filename(dataset, var, freq, grid, levelout, area, year) + '.grib')
+
+
+def month_file(yearfile, month):
+    """Path of a monthly GRIB chunk of a yearly file"""
+    yearfile = Path(yearfile)
+    return yearfile.with_name(f'{yearfile.stem}_month{month}.grib')
+
+
+def is_year_complete(outdir, dataset, var, freq, grid, levelout, area, year):
+    """True if the yearly GRIB file is already on disk and complete"""
+    yearfile = year_file(outdir, dataset, var, freq, grid, levelout, area, year)
+    return is_file_complete(yearfile, expected_steps(freq, year, month_chunks('yearly')[0]))
+
+
+def chunk_retrieve(dataset, var, freq, year, months, grid, levelout, area, outfile,
+                   product_type='reanalysis', retries=3, client=None):
+    """
+    Download the given months of a year into outfile, unless it is already complete.
+
+    Returns:
+        Path: outfile
+    """
+    outfile = Path(outfile)
+    minimum_steps = expected_steps(freq, year, months)
+    if is_file_complete(outfile, minimum_steps):
+        return outfile
+
+    name, req = build_request(dataset, var, freq, str(year), months, grid=grid, levelout=levelout,
+                              area=area, product_type=product_type)
+    download(name, req, outfile, retries=retries, client=client or get_client())
+
+    if not is_file_complete(outfile, minimum_steps):
+        raise RuntimeError(f'Downloaded file {outfile} is incomplete')
+    return outfile
+
+
+def month_retrieve(dataset, var, freq, year, month, grid, levelout, area, outdir,
+                   product_type='reanalysis', retries=3):
+    """
+    Download a single month of a year as a GRIB chunk '<basicname>_monthMM.grib'.
+    Chunks are later joined by concat_months.
+
+    Returns:
+        Path: the monthly GRIB file
+    """
+    yearfile = year_file(outdir, dataset, var, freq, grid, levelout, area, year)
+    return chunk_retrieve(dataset, var, freq, year, [month], grid, levelout, area,
+                          month_file(yearfile, month), product_type=product_type, retries=retries)
+
+
+def concat_months(dataset, var, freq, year, grid, levelout, area, outdir):
+    """
+    Concatenate the twelve monthly chunks of a year into the yearly GRIB file
+    and remove them.
+
+    Returns:
+        Path: the yearly GRIB file
+    """
+    yearfile = year_file(outdir, dataset, var, freq, grid, levelout, area, year)
+    monthly_files = [month_file(yearfile, m[0]) for m in month_chunks('monthly')]
+    missing = [f.name for f in monthly_files if not f.exists()]
+    if missing:
+        raise RuntimeError(f'Cannot build {yearfile.name}, missing chunks: {", ".join(missing)}')
+
+    tmpfile = yearfile.with_name(yearfile.name + '.part')
+    get_cdo().cat(input=' '.join(str(f) for f in monthly_files), output=str(tmpfile))
+    if not is_file_complete(tmpfile, expected_steps(freq, year, month_chunks('yearly')[0])):
+        tmpfile.unlink(missing_ok=True)
+        raise RuntimeError(f'Concatenated file {yearfile.name} is incomplete')
+    tmpfile.replace(yearfile)
+    for f in monthly_files:
+        f.unlink()
+    return yearfile
+
+
 def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir,
                   request='yearly', product_type='reanalysis', retries=3):
     """
     Download a single year of an ERA5 / ERA5-Land dataset as a GRIB file.
 
-    With request='monthly' the year is split in twelve requests, which are
-    concatenated at the end. Complete files already on disk are not downloaded again.
+    With request='monthly' the twelve months are downloaded sequentially and then
+    concatenated (the CLI instead runs the months in parallel with month_retrieve
+    and concat_months). Complete files already on disk are not downloaded again.
 
     Returns:
         Path: the yearly GRIB file
     """
     year = str(year)
-    basicname = create_filename(dataset, var, freq, grid, levelout, area, year)
-    yearfile = Path(outdir, basicname + '.grib')
-    all_months = month_chunks('yearly')[0]
-
-    if is_file_complete(yearfile, expected_steps(freq, year, all_months)):
+    yearfile = year_file(outdir, dataset, var, freq, grid, levelout, area, year)
+    if is_year_complete(outdir, dataset, var, freq, grid, levelout, area, year):
         return yearfile
 
     client = get_client()
-    chunks = month_chunks(request)
-    for months in chunks:
-        if request == 'monthly':
-            outfile = Path(outdir, f'{basicname}_month{months[0]}.grib')
-        else:
-            outfile = yearfile
+    if request == 'yearly':
+        return chunk_retrieve(dataset, var, freq, year, month_chunks('yearly')[0], grid, levelout,
+                              area, yearfile, product_type=product_type, retries=retries, client=client)
 
-        minimum_steps = expected_steps(freq, year, months)
-        if request == 'monthly' and is_file_complete(outfile, minimum_steps):
-            continue
-
-        name, req = build_request(dataset, var, freq, year, months, grid=grid, levelout=levelout,
-                                  area=area, product_type=product_type)
-        download(name, req, outfile, retries=retries, client=client)
-
-        if not is_file_complete(outfile, minimum_steps):
-            raise RuntimeError(f'Downloaded file {outfile} is incomplete')
-
-    # concatenate monthly files and remove them
-    if request == 'monthly':
-        monthly_files = [Path(outdir, f'{basicname}_month{m[0]}.grib') for m in chunks]
-        tmpfile = yearfile.with_name(yearfile.name + '.part')
-        get_cdo().cat(input=' '.join(str(f) for f in monthly_files), output=str(tmpfile))
-        tmpfile.replace(yearfile)
-        for f in monthly_files:
-            f.unlink()
-
-    return yearfile
+    for (month,) in month_chunks(request):
+        chunk_retrieve(dataset, var, freq, year, [month], grid, levelout, area,
+                       month_file(yearfile, month), product_type=product_type, retries=retries,
+                       client=client)
+    return concat_months(dataset, var, freq, year, grid, levelout, area, outdir)

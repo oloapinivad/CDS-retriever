@@ -7,9 +7,10 @@ from pathlib import Path
 
 from .api import estimate_cost, validate_request
 from .config import apply_args, load_config, parser, print_config, validate_config
-from .download import choose_request_mode, year_retrieve
+from .download import (choose_request_mode, concat_months, is_year_complete, month_retrieve,
+                       year_retrieve)
 from .postproc import daily_mean, merge_monthly, which_new_years_download, year_convert
-from .request import build_request, create_filename
+from .request import build_request, create_filename, month_chunks
 
 log = logging.getLogger('cds_retriever')
 LOG_FORMAT = '%(asctime)s %(levelname)s %(processName)s: %(message)s'
@@ -70,6 +71,41 @@ def check_variable(config, var, years):
     return name, yearly, mode
 
 
+def retrieve_variable(config, var, years, mode, savedir):
+    """
+    Download all years of a variable into savedir.
+
+    Yearly requests are one job per year. Monthly requests are one job per
+    (year, month), so that all the nprocs workers are busy even with few years,
+    followed by the concatenation of the chunks of each year.
+    The pool size nprocs is the maximum number of simultaneous CDS requests.
+
+    Returns:
+        dict: label -> exception for the failed jobs
+    """
+    common = dict(dataset=config['dataset'], var=var, freq=config['freq'], grid=config['grid'],
+                  levelout=config['levelout'], area=config['area'], outdir=savedir)
+    options = dict(product_type=config['product_type'], retries=config['retries'])
+    nprocs = config['nprocs']
+
+    if mode == 'yearly':
+        jobs = [(f'{var} {year} retrieve', dict(common, year=year, request=mode, **options))
+                for year in years]
+        return run_parallel(year_retrieve, jobs, nprocs)
+
+    todo = [year for year in years if not is_year_complete(year=year, **common)]
+    jobs = [(f'{var} {year}-{month} retrieve', dict(common, year=year, month=month, **options))
+            for year in todo for (month,) in month_chunks(mode)]
+    failures = run_parallel(month_retrieve, jobs, nprocs)
+
+    # years with a missing month are not concatenated, complete chunks are kept for the next run
+    failed_years = {kwargs['year'] for label, kwargs in jobs if label in failures}
+    jobs = [(f'{var} {year} concat', dict(common, year=year))
+            for year in todo if year not in failed_years]
+    failures.update(run_parallel(concat_months, jobs, nprocs))
+    return failures
+
+
 def process_variable(config, var, dry_run=False):
     """Retrieve and postprocess a single variable. Returns the dict of failures."""
     dataset, freq, grid = config['dataset'], config['freq'], config['grid']
@@ -106,14 +142,9 @@ def process_variable(config, var, dry_run=False):
     savedir.mkdir(parents=True, exist_ok=True)
 
     if do_retrieve:
-        jobs = [(f'{var} {year} retrieve',
-                 dict(dataset=dataset, var=var, freq=freq, year=year, grid=grid, levelout=levelout,
-                      area=area, outdir=savedir, request=mode,
-                      product_type=config['product_type'], retries=config['retries']))
-                for year in years]
-        failures = run_parallel(year_retrieve, jobs, nprocs)
+        failures = retrieve_variable(config, var, years, mode, savedir)
         if failures:
-            log.error('%s: %d years failed to download, skipping postprocessing', var, len(failures))
+            log.error('%s: %d downloads failed, skipping postprocessing', var, len(failures))
             return failures
 
     if not do_postproc:
