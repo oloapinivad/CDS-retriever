@@ -121,6 +121,9 @@ Downloaded GRIB files are kept in `<tmpdir>/<variable>/`, while netCDF files are
 
 The naming scheme is the same as in previous versions (checked by `tests/test_naming_compat.py`),
 so existing archives can be extended with `year.update` / `--update`.
+Daily means are recomputed from all the yearly sub-daily files, and the previous daily file
+of the same dataset is removed (e.g. `..._day_..._1979-2019.nc` replaced by `..._1979-2025.nc`),
+unless it covers years that are no longer available as sub-daily files.
 Exception: with an `area` selection, older versions wrote merged monthly and daily files with
 wrong years taken from the area string (e.g. `..._40-40_70_-20_30_40.nc`). The update reports
 these files: rename them with the actual years (e.g. `..._1940-2022_70_-20_30_40.nc`) and run again.

@@ -139,7 +139,11 @@ def merge_monthly(destdir, dataset, var, freq, grid, levelout, area, update=Fals
 
 
 def daily_mean(storedir, dataset, var, freq, grid, levelout, area):
-    """Compute a single daily mean file from all the yearly sub-daily files"""
+    """
+    Compute a single daily mean file from all the yearly sub-daily files.
+    Older daily files of the same dataset (same variable, grid, level and area) whose
+    years are covered by the new file are removed, so that no period is duplicated.
+    """
     destdir = Path(storedir, var, freq)
     daydir = Path(storedir, var, 'day')
     daydir.mkdir(parents=True, exist_ok=True)
@@ -156,4 +160,24 @@ def daily_mean(storedir, dataset, var, freq, grid, levelout, area):
     log.info('Creating daily file %s', dayfile)
     get_cdo().daymean(input='-cat ' + ' '.join(files), output=str(tmpfile), options=NC_OPTIONS)
     tmpfile.replace(dayfile)
+    remove_superseded_daily(dayfile, first, last, dataset, var, grid, levelout, area)
     return dayfile
+
+
+def remove_superseded_daily(dayfile, first, last, dataset, var, grid, levelout, area):
+    """
+    Remove older daily files (e.g. ..._day_..._1979-2019.nc after creating ..._1979-2025.nc).
+    A file is kept if it covers years outside the new file, e.g. when old yearly
+    sub-daily files have been deleted from the archive.
+    """
+    pattern = Path(dayfile.parent, create_filename(dataset, var, 'day', grid, levelout, area, '????-????') + '.nc')
+    for old in sorted(glob.glob(str(pattern))):
+        old = Path(old)
+        if old == dayfile:
+            continue
+        old_first, old_last = year_range([old], dataset, var, 'day', grid, levelout)
+        if first <= old_first and old_last <= last:
+            log.info('Removing superseded daily file %s', old)
+            old.unlink()
+        else:
+            log.warning('Keeping %s: it covers years not available in %s', old, dayfile.name)
