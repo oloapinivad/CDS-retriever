@@ -119,6 +119,12 @@ Downloaded GRIB files are kept in `<tmpdir>/<variable>/`, while netCDF files are
 `<storedir>/<variable>/<freq>/` (and `<storedir>/<variable>/day/` for daily means), named as
 `<dataset>_<variable>_<freq>_<grid>_<levelout>_<years>[_<area>].nc`.
 
+The naming scheme is the same as in previous versions (checked by `tests/test_naming_compat.py`),
+so existing archives can be extended with `year.update` / `--update`.
+Exception: with an `area` selection, older versions wrote merged monthly and daily files with
+wrong years taken from the area string (e.g. `..._40-40_70_-20_30_40.nc`). The update reports
+these files: rename them with the actual years (e.g. `..._1940-2022_70_-20_30_40.nc`) and run again.
+
 ## Development
 
 ```

@@ -51,6 +51,18 @@ def find_files(destdir, dataset, var, freq, grid, levelout, area, merged=False):
     return sorted(glob.glob(str(pattern)))
 
 
+def find_legacy_area_files(destdir, dataset, var, freq, grid, levelout, area):
+    """
+    Merged files written by versions before 0.2 with an area selection: their year
+    range was parsed from the area string, e.g. ..._40-40_70_-20_30_40.nc
+    """
+    if area == 'global':
+        return []
+    last = str(area[-1])
+    pattern = create_filename(dataset, var, freq, grid, levelout, area, f'{last}-{last}') + '.nc'
+    return [Path(f).name for f in sorted(glob.glob(str(Path(destdir, glob.escape(pattern)))))]
+
+
 def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area):
     """
     Identify which years need to be downloaded to extend an existing dataset:
@@ -60,7 +72,13 @@ def which_new_years_download(storedir, dataset, var, freq, grid, levelout, area)
     files = (find_files(destdir, dataset, var, freq, grid, levelout, area, merged=True) +
              find_files(destdir, dataset, var, freq, grid, levelout, area))
     if not files:
-        raise FileNotFoundError(f'Update requested, but no existing files for {var} found in {destdir}')
+        msg = f'Update requested, but no existing files for {var} found in {destdir}'
+        legacy = find_legacy_area_files(destdir, dataset, var, freq, grid, levelout, area)
+        if legacy:
+            msg += ('. Found files with wrong years in the name, written by versions before 0.2 '
+                    'when an area is selected: rename them with the actual years '
+                    '(e.g. _40-40_ -> _1940-2022_) and run again: ' + ', '.join(legacy))
+        raise FileNotFoundError(msg)
     _, last = year_range(files, dataset, var, freq, grid, levelout)
     return int(last) + 1, datetime.datetime.now().year - 1
 

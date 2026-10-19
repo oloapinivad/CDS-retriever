@@ -79,17 +79,15 @@ def level_label(levelout):
     """
     String used for levelout in file names.
 
-    'sfc', 'plev19' and '500hPa' are kept as they are,
-    a list of levels becomes e.g. '500-700-850hPa'.
+    A string ('sfc', 'plev19', '500hPa', '500') is used verbatim, as in the
+    original naming scheme, so that existing archives can still be updated.
+    A list of levels becomes e.g. '500-700-850hPa'.
     """
     if isinstance(levelout, (list, tuple)):
         if len(levelout) == 1:
-            return level_label(levelout[0])
+            return str(levelout[0])
         return '-'.join(validate_pressure_lev(levelout)) + 'hPa'
-    levelout = str(levelout)
-    if _LEVEL_PATTERN.match(levelout) and not levelout.endswith('hPa'):
-        return levelout + 'hPa'
-    return levelout
+    return str(levelout)
 
 
 def dataset_id(dataset, level_kind, freq):

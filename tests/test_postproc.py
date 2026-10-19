@@ -33,3 +33,15 @@ def test_which_new_years_download_hourly(tmp_path):
     for year in (2018, 2019):
         (destdir / f'ERA5_tp_1hr_full_sfc_{year}.nc').touch()
     assert which_new_years_download(tmp_path, 'ERA5', 'tp', '1hr', 'full', 'sfc', 'global')[0] == 2020
+
+
+def test_update_reports_legacy_area_names(tmp_path):
+    """Before 0.2, merged files with an area got the years from the area string"""
+    destdir = tmp_path / 'tp' / 'mon'
+    destdir.mkdir(parents=True)
+    (destdir / 'ERA5_tp_mon_full_sfc_40-40_70_-20_30_40.nc').touch()
+    with pytest.raises(FileNotFoundError, match='ERA5_tp_mon_full_sfc_40-40_70_-20_30_40.nc'):
+        which_new_years_download(tmp_path, *ARGS, [70, -20, 30, 40])
+    (destdir / 'ERA5_tp_mon_full_sfc_40-40_70_-20_30_40.nc').rename(
+        destdir / 'ERA5_tp_mon_full_sfc_2022-2023_70_-20_30_40.nc')
+    assert which_new_years_download(tmp_path, *ARGS, [70, -20, 30, 40])[0] == 2024

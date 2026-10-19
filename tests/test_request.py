@@ -29,7 +29,7 @@ def test_define_level_invalid(levelout):
 
 
 @pytest.mark.parametrize('levelout, label', [
-    ('sfc', 'sfc'), ('plev19', 'plev19'), ('500hPa', '500hPa'), ('500', '500hPa'),
+    ('sfc', 'sfc'), ('plev19', 'plev19'), ('500hPa', '500hPa'), ('500', '500'),
     (['500hPa'], '500hPa'), (['500hPa', '850'], '500-850hPa'),
 ])
 def test_level_label(levelout, label):
