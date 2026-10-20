@@ -128,9 +128,14 @@ retrieve the ERA5 and ERA5-Land post-processed daily statistics
 `derived-era5-land-daily-statistics`). The CDS computes them from the hourly data, in UTC days.
 They are a few days behind the hourly data.
 
-- The CDS delivers them as netCDF only (a zip with a single file is unpacked), so the downloaded
-  files are `.nc` and they are never grouped: one request per variable. Variable names are those
-  of the CDS netCDF files, not the ecCodes short names of the converted GRIB files.
+- The CDS delivers netCDF: a single file for one variable, a zip with one file per variable for
+  several (a zip with a single file is unpacked). The downloaded files are `.nc` and they are
+  never grouped: one request per variable. The files
+  are written by cfgrib: `valid_time` axis and cfgrib names (`t2m`, `tp`), not the ecCodes short
+  names of the converted GRIB files (`2t`).
+- `day` is the mean of the hourly values: for accumulated fields (e.g. `total_precipitation`)
+  use `daysum` to get daily totals. Accumulations are shifted by one hour by the CDS, so that each
+  day collects the steps ending within it.
 - The CDS limit is 400 fields (days x levels) per request. One year of a single-level variable
   fits in a yearly request. Pressure levels need monthly requests (chosen by `download_request:
   auto`), and at most 12 levels: use `plev8` or a list of levels, not `plev19`/`plev37`.
