@@ -189,3 +189,30 @@ def test_split_by_param(tmp_path):
 def test_last_available_live():
     last = api.last_available('ERA5', 'mon', 'sfc')
     assert datetime.date(2025, 1, 1) < last <= datetime.date.today()
+
+
+def test_last_available_in(monkeypatch):
+    constraints = [
+        {'processinglevel': ['level_4'], 'temporal_resolution': ['monthly'], 'year': ['2025', '2026'],
+         'month': ['01', '09']},
+        {'processinglevel': ['level_4'], 'temporal_resolution': ['monthly'], 'year': ['2025'],
+         'month': ['10', '12']},
+        {'processinglevel': ['level_4'], 'temporal_resolution': ['daily'], 'year': ['2026'],
+         'month': ['10'], 'day': ['01', '04']},
+        {'processinglevel': ['level_3c'], 'temporal_resolution': ['monthly'], 'year': ['2027'], 'month': ['01']},
+    ]
+    monkeypatch.setattr(api, 'get_constraints', lambda dataset, url=None: constraints)
+    assert api.last_available_in('sst', processinglevel='level_4', temporal_resolution='monthly') \
+        == datetime.date(2026, 9, 1)
+    assert api.last_available_in('sst', processinglevel='level_4', temporal_resolution='daily') \
+        == datetime.date(2026, 10, 4)
+    with pytest.raises(ValueError, match='No data'):
+        api.last_available_in('sst', processinglevel='level_2')
+
+
+@pytest.mark.network
+def test_last_available_in_live():
+    last = api.last_available_in('satellite-sea-surface-temperature', processinglevel='level_4',
+                                 sensor_on_satellite='combined_product', version='3_0',
+                                 temporal_resolution='monthly')
+    assert datetime.date(2025, 1, 1) < last <= datetime.date.today()

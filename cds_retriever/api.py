@@ -4,6 +4,7 @@ The CDS (2024+ infrastructure, OGC API Processes) exposes, without authenticatio
   - GET  <url>/retrieve/v1/processes/<dataset>          inputs schema (allowed keys and values)
   - POST <url>/retrieve/v1/processes/<dataset>/costing  request size and limit
   - GET  <url>/catalogue/v1/collections/<dataset>       metadata, including the time extent
+    and the link to the constraints (the valid combinations of the request keys)
 """
 
 import datetime
@@ -112,6 +113,42 @@ def available_until(name, url=None):
     if not ends:
         raise ValueError(f'No end date in the time extent of {name}')
     return max(datetime.date.fromisoformat(end[:10]) for end in ends)
+
+
+def get_constraints(dataset, url=None):
+    """Valid combinations of the request keys of a dataset (list of {key: [values]})"""
+    links = get_collection(dataset, url=url).get('links', [])
+    href = next((link['href'] for link in links if link.get('rel') == 'constraints'), None)
+    if href is None:
+        raise ValueError(f'No constraints published for {dataset}')
+    return _call(href)
+
+
+def last_available_in(dataset, url=None, **selection):
+    """
+    Last date available in any CDS dataset for a selection of the request keys,
+    e.g. last_available_in('satellite-sea-surface-temperature', processinglevel='level_4',
+    temporal_resolution='monthly'): from the constraints, more precise than the
+    time extent of the catalogue, which covers all the products of the dataset.
+
+    Returns:
+        datetime.date: the first day of the last month, or the last day when
+            the constraints select days.
+    """
+    last = None
+    for combination in get_constraints(dataset, url=url):
+        if not all(str(value) in combination.get(key, []) for key, value in selection.items()):
+            continue
+        if not combination.get('year') or not combination.get('month'):
+            continue
+        # each combination is the cartesian product of its values
+        date = datetime.date(max(int(y) for y in combination['year']),
+                             max(int(m) for m in combination['month']),
+                             max((int(d) for d in combination.get('day', [])), default=1))
+        last = date if last is None else max(last, date)
+    if last is None:
+        raise ValueError(f'No data in {dataset} for {selection}')
+    return last
 
 
 def last_available(dataset='ERA5', freq='mon', levelout='sfc', url=None):
