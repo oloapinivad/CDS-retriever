@@ -5,11 +5,13 @@ import logging
 import shutil
 import subprocess
 import time
+import zipfile
 from pathlib import Path
 
 from .api import estimate_cost
 from .cdo_utils import get_cdo, ntime
-from .request import PARAM_IDS, build_request, create_filename, expected_steps, month_chunks
+from .request import (PARAM_IDS, build_request, create_filename, download_suffix, expected_steps,
+                      month_chunks)
 
 log = logging.getLogger(__name__)
 
@@ -88,6 +90,7 @@ def download(dataset, request, target, retries=3, wait=60, client=None):
         try:
             log.info('Requesting %s (attempt %d/%d): %s', target.name, attempt, retries, request)
             client.retrieve(dataset, request, str(part))
+            unzip_single(part)
             part.replace(target)
             return target
         except Exception as exc:
@@ -99,15 +102,31 @@ def download(dataset, request, target, retries=3, wait=60, client=None):
     return target
 
 
+def unzip_single(path):
+    """Replace a zip archive holding a single file (as the CDS may deliver netCDF) with that file"""
+    path = Path(path)
+    if not zipfile.is_zipfile(path):
+        return
+    with zipfile.ZipFile(path) as archive:
+        members = [m for m in archive.namelist() if not m.endswith('/')]
+        if len(members) != 1:
+            raise RuntimeError(f'{path.name}: expected a single file in the zip archive, found {members}')
+        log.info('Extracting %s from the zip archive', members[0])
+        tmp = path.with_name(path.name + '.unzip')
+        with archive.open(members[0]) as src, open(tmp, 'wb') as dst:
+            shutil.copyfileobj(src, dst)
+    tmp.replace(path)
+
+
 def year_file(outdir, dataset, var, freq, grid, levelout, area, year):
-    """Path of the yearly GRIB file"""
-    return Path(outdir, create_filename(dataset, var, freq, grid, levelout, area, year) + '.grib')
+    """Path of the yearly downloaded file (GRIB, or netCDF for daily statistics)"""
+    return Path(outdir, create_filename(dataset, var, freq, grid, levelout, area, year) + download_suffix(freq))
 
 
 def month_file(yearfile, month):
-    """Path of a monthly GRIB chunk of a yearly file"""
+    """Path of a monthly chunk of a yearly file"""
     yearfile = Path(yearfile)
-    return yearfile.with_name(f'{yearfile.stem}_month{month}.grib')
+    return yearfile.with_name(f'{yearfile.stem}_month{month}{yearfile.suffix}')
 
 
 def is_year_complete(outdir, dataset, var, freq, grid, levelout, area, year):

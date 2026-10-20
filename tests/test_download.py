@@ -155,3 +155,25 @@ def test_download_retries(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match='after 2 attempts'):
         dl.download('x', {}, tmp_path / 'g.grib', retries=2, client=BrokenClient())
     assert list(tmp_path.glob('g.grib*')) == []
+
+
+def test_unzip_single(tmp_path):
+    """A zip with a single file (as the CDS may deliver netCDF) is replaced by that file"""
+    import zipfile
+    target = tmp_path / 'data.nc.part'
+    with zipfile.ZipFile(target, 'w') as archive:
+        archive.writestr('data_stream-oper.nc', b'netcdf')
+    dl.unzip_single(target)
+    assert target.read_bytes() == b'netcdf'
+    dl.unzip_single(target)  # not a zip: unchanged
+    assert target.read_bytes() == b'netcdf'
+    with zipfile.ZipFile(target, 'w') as archive:
+        archive.writestr('a.nc', b'a')
+        archive.writestr('b.nc', b'b')
+    with pytest.raises(RuntimeError, match='single file'):
+        dl.unzip_single(target)
+
+
+def test_month_file_keeps_suffix():
+    assert dl.month_file(Path('x/ERA5_t_day_full_sfc_2000.nc'), '03').name == 'ERA5_t_day_full_sfc_2000_month03.nc'
+    assert dl.month_file(Path('x/ERA5_t_mon_full_sfc_2000.grib'), '03').name == 'ERA5_t_mon_full_sfc_2000_month03.grib'

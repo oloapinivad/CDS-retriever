@@ -7,7 +7,7 @@ from collections.abc import Mapping
 
 import yaml
 
-from .request import DATASETS, FREQS, GRIDS, PRODUCT_TYPES, REQUEST_MODES, define_level
+from .request import DATASETS, FREQS, GRIDS, PRODUCT_TYPES, REQUEST_MODES, dataset_id, define_level, is_daily
 
 log = logging.getLogger(__name__)
 
@@ -128,9 +128,18 @@ def validate_config(config):
             errors.append(f'{key}: {config[key]} is not valid, options are {allowed}')
 
     try:
-        define_level(config['levelout'])
+        _, level_kind = define_level(config['levelout'])
     except ValueError as exc:
         errors.append(f'levelout: {exc}')
+    else:
+        if config['dataset'] in DATASETS and config['freq'] in FREQS:
+            try:
+                dataset_id(config['dataset'], level_kind, config['freq'])
+            except ValueError as exc:
+                errors.append(str(exc))
+
+    if is_daily(config['freq']) and config['grid'] != 'full':
+        errors.append('grid selection is not available for daily statistics: use grid: full')
 
     area = config['area']
     if area != 'global':

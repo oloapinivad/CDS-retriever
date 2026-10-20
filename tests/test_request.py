@@ -1,7 +1,8 @@
 import pytest
 
 from cds_retriever.request import (build_request, create_filename, dataset_id, define_level,
-                                   define_time, expected_steps, level_label, month_chunks)
+                                   define_time, download_suffix, expected_steps, level_label,
+                                   month_chunks)
 
 MONTHS = [str(i).zfill(2) for i in range(1, 13)]
 
@@ -41,6 +42,9 @@ def test_level_label(levelout, label):
     ('ERA5', 'pressure-levels', 'mon', 'reanalysis-era5-pressure-levels-monthly-means'),
     ('ERA5-Land', 'single-levels', '6hrs', 'reanalysis-era5-land'),
     ('ERA5-Land', 'single-levels', 'mon', 'reanalysis-era5-land-monthly-means'),
+    ('ERA5', 'single-levels', 'day', 'derived-era5-single-levels-daily-statistics'),
+    ('ERA5', 'pressure-levels', 'daymax', 'derived-era5-pressure-levels-daily-statistics'),
+    ('ERA5-Land', 'single-levels', 'daysum', 'derived-era5-land-daily-statistics'),
 ])
 def test_dataset_id(dataset, kind, freq, name):
     assert dataset_id(dataset, kind, freq) == name
@@ -51,6 +55,8 @@ def test_dataset_id_invalid():
         dataset_id('ERA5-Land', 'pressure-levels', 'mon')
     with pytest.raises(ValueError):
         dataset_id('ERA6', 'single-levels', 'mon')
+    with pytest.raises(ValueError, match='only on single levels'):
+        dataset_id('ERA5', 'pressure-levels', 'daysum')
 
 
 def test_define_time():
@@ -65,6 +71,10 @@ def test_define_time():
         define_time('1hr', 'ensemble_members')
     with pytest.raises(ValueError):
         define_time('2hrs')
+    product, day, time = define_time('day', 'ensemble_mean')
+    assert product == 'ensemble_mean' and len(day) == 31 and time is None
+    with pytest.raises(ValueError, match='daily statistics'):
+        define_time('daymin', 'ensemble_spread')
 
 
 def test_expected_steps():
@@ -72,6 +82,8 @@ def test_expected_steps():
     assert expected_steps('1hr', 2000, MONTHS) == 366 * 24
     assert expected_steps('6hrs', 2001, MONTHS) == 365 * 4
     assert expected_steps('3hrs', 2001, ['02']) == 28 * 8
+    assert expected_steps('day', 2000, MONTHS) == 366
+    assert expected_steps('daymax', 2001, ['02']) == 28
 
 
 def test_month_chunks():
@@ -93,6 +105,27 @@ def test_build_request_monthly_means():
         'data_format': 'grib',
         'download_format': 'unarchived',
     }
+
+
+@pytest.mark.parametrize('freq, statistic', [('day', 'daily_mean'), ('daymin', 'daily_minimum'),
+                                             ('daymax', 'daily_maximum'), ('daysum', 'daily_sum')])
+def test_build_request_daily_statistics(freq, statistic):
+    name, req = build_request('ERA5', '2m_temperature', freq, 2000, ['01'])
+    assert name == 'derived-era5-single-levels-daily-statistics'
+    assert req == {
+        'product_type': ['reanalysis'],
+        'variable': ['2m_temperature'],
+        'year': ['2000'],
+        'month': ['01'],
+        'day': [str(i).zfill(2) for i in range(1, 32)],
+        'daily_statistic': statistic,
+        'time_zone': 'utc+00:00',
+        'frequency': '1_hourly',
+    }
+    _, req = build_request('ERA5', 'temperature', 'day', 2000, MONTHS, levelout='plev8')
+    assert len(req['pressure_level']) == 8
+    with pytest.raises(ValueError, match='grid selection'):
+        build_request('ERA5', '2m_temperature', 'day', 2000, MONTHS, grid='1x1')
 
 
 def test_build_request_pressure_levels():
@@ -118,3 +151,8 @@ def test_create_filename():
         'ERA5_tp_mon_full_sfc_1940-2022'
     assert create_filename('ERA5', 't', '1hr', '2.5x2.5', ['500hPa', '850'], [65, -15, 25, 45], '1940', '2022') == \
         'ERA5_t_1hr_2.5x2.5_500-850hPa_1940_65_-15_25_45'
+
+
+def test_download_suffix():
+    assert download_suffix('mon') == '.grib' and download_suffix('1hr') == '.grib'
+    assert download_suffix('day') == '.nc' and download_suffix('daysum') == '.nc'

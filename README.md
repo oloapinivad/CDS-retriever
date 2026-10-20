@@ -27,6 +27,8 @@ It is built on top of:
 - Post-processing converts the downloaded GRIB files to compressed NetCDF4 format.
 - For monthly data, the script merges the yearly files and optionally aligns the time axis.
 - For sub-daily data, daily mean files are generated.
+- Daily statistics (mean, minimum, maximum, sum) can be retrieved directly: the CDS computes them
+  from the hourly data, so the hourly fields are not downloaded.
 
 ## Set-up
 It is recommended to use conda to isolate dependencies (CDO and ecCodes are not pip-installable):
@@ -104,7 +106,7 @@ the **command-line argument takes precedence.**
 | `year.begin`         | `int`               | First year of the time range to retrieve.                                          |
 | `year.end`           | `int`               | Last year of the time range to retrieve.                                           |
 | `year.update`        | `bool`              | If **`True`**, the script extends an existing dataset up to the last complete year. Overrides `year.begin` and `year.end`.  |
-| `freq`               | `str`               | Data frequency. Options: **`'instant'`**, **`'1hr'`**, **`'3hrs'`**, **`'6hrs'`**, **`'mon'`** (`'mon'` = monthly means, default). |
+| `freq`               | `str`               | Data frequency. Options: **`'instant'`**, **`'1hr'`**, **`'3hrs'`**, **`'6hrs'`**, **`'day'`**, **`'daymin'`**, **`'daymax'`**, **`'daysum'`**, **`'mon'`** (`'mon'` = monthly means, default). The `day*` options are daily statistics computed by the CDS, see below. |
 | `levelout`           | `str`/`list[str]`   | Vertical level selection. Options: **`'sfc'`** (default), **`'plev37'`**, **`'plev19'`**, **`'plev8'`**, a single level (e.g. **`'500hPa'`**) or a list of levels (e.g. **`['500hPa', '850hPa']`**). |
 | `grid`               | `str`               | Output grid resolution. Options: **`'full'`** (default, native grid), **`'0.1x0.1'`**, **`'0.25x0.25'`**, **`'0.5x0.5'`**, **`'1x1'`**, **`'2.5x2.5'`**. |
 | `area`               | `str`/`list[float]` | Geographic area for download. Either **`'global'`** or a list of coordinates `[North, West, South, East]`, e.g., `[65, -15, 25, 45]`. |
@@ -117,6 +119,24 @@ the **command-line argument takes precedence.**
 | `do_postproc`        | `bool`              | If **`True`**, runs postprocessing with **CDO**.                                   |
 | `do_align`           | `bool`              | If **`True`**, aligns monthly time axes (to 00:00) for **Xarray** compatibility.   |
 | `merge`              | `bool`              | If **`True`** (default), monthly data are merged in a single multi-year file; otherwise yearly files are kept. |
+
+### Daily statistics
+
+`freq: day` (daily mean), `daymin`, `daymax` and `daysum` (daily sum, single levels only)
+retrieve the ERA5 and ERA5-Land post-processed daily statistics
+(`derived-era5-single-levels-daily-statistics`, `derived-era5-pressure-levels-daily-statistics`,
+`derived-era5-land-daily-statistics`). The CDS computes them from the hourly data, in UTC days.
+They are a few days behind the hourly data.
+
+- The CDS delivers them as netCDF only (a zip with a single file is unpacked), so the downloaded
+  files are `.nc` and they are never grouped: one request per variable. Variable names are those
+  of the CDS netCDF files, not the ecCodes short names of the converted GRIB files.
+- The CDS limit is 400 fields (days x levels) per request. One year of a single-level variable
+  fits in a yearly request. Pressure levels need monthly requests (chosen by `download_request:
+  auto`), and at most 12 levels: use `plev8` or a list of levels, not `plev19`/`plev37`.
+- `grid` must be `full`. Ensemble products are `ensemble_members` and `ensemble_mean`.
+- The yearly files are kept in `<storedir>/<variable>/<freq>/`, e.g.
+  `ERA5_2m_temperature_day_full_sfc_2024.nc`. `merge` applies to monthly data only.
 
 ## Use as a library
 
@@ -144,7 +164,7 @@ result.requests   # one Request per CDS request group, with its cost when known
 
 ## Output
 
-Downloaded GRIB files are kept in `<tmpdir>/<variable>/`, while netCDF files are stored in
+Downloaded GRIB files (netCDF for daily statistics) are kept in `<tmpdir>/<variable>/`, while netCDF files are stored in
 `<storedir>/<variable>/<freq>/` (and `<storedir>/<variable>/day/` for daily means), named as
 `<dataset>_<variable>_<freq>_<grid>_<levelout>_<years>[_<area>].nc`.
 

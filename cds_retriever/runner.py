@@ -20,7 +20,8 @@ from .config import load_config, validate_config
 from .download import (choose_request_mode, concat_months, group_retrieve, is_year_complete,
                        month_retrieve, year_retrieve)
 from .postproc import align_time, daily_mean, merge_monthly, which_new_years_download, year_convert
-from .request import PARAM_IDS, build_request, create_filename, month_chunks
+from .request import (HOURS_STEP, PARAM_IDS, build_request, create_filename, download_suffix, is_daily,
+                      month_chunks)
 
 log = logging.getLogger('cds_retriever')
 LOG_FORMAT = '%(asctime)s %(levelname)s %(processName)s: %(message)s'
@@ -157,14 +158,16 @@ def plan_requests(config, years_by_var):
     """
     Group the variables sharing the same years into a single request when possible
     (group_variables: auto, variables listed in PARAM_IDS, yearly request within the CDS limit),
-    the other ones get their own request.
+    the other ones get their own request. Daily statistics are netCDF files that cannot be split
+    by paramId: they are never grouped.
 
     Returns:
         list of Request (cost and limit filled for grouped requests only)
     """
     requests = []
     single = [var for var, years in years_by_var.items() if years]
-    if config['group_variables'] == 'auto' and config['download_request'] != 'monthly':
+    if (config['group_variables'] == 'auto' and config['download_request'] != 'monthly'
+            and not is_daily(config['freq'])):
         groups = {}
         for var in single:
             if var in PARAM_IDS:
@@ -246,7 +249,8 @@ def retrieve_group(config, variables, years):
 def postprocess_variable(config, var, years):
     """
     Convert the yearly GRIB files of a variable to netCDF, then merge monthly data
-    (if merge is set) or compute daily means of sub-daily data.
+    (if merge is set) or compute daily means of sub-daily data. Daily statistics are kept
+    as yearly files.
 
     Returns:
         tuple: (list of netCDF files produced, dict of failures)
@@ -262,7 +266,7 @@ def postprocess_variable(config, var, years):
         filename = create_filename(dataset, var, freq, grid, levelout, area, year)
         yearly.append(Path(destdir, filename + '.nc'))
         jobs.append((f'{var} {year} convert',
-                     dict(infile=Path(savedir, filename + '.grib'), outfile=yearly[-1])))
+                     dict(infile=Path(savedir, filename + download_suffix(freq)), outfile=yearly[-1])))
     failures = run_parallel(year_convert, jobs, config['nprocs'])
     if failures:
         return [], failures
@@ -276,7 +280,7 @@ def postprocess_variable(config, var, years):
                                    update=config['year']['update'])
             return ([merged] if merged else []), {}
         return yearly, {}
-    if freq != 'instant':
+    if freq in HOURS_STEP:
         dayfile = daily_mean(config['storedir'], dataset, var, freq, grid, levelout, area)
         return yearly + ([dayfile] if dayfile else []), {}
     return yearly, {}
@@ -348,8 +352,8 @@ def retrieve(config, *, variables=None, years=None, dry_run=False):
         for var, var_years in years_by_var.items():
             if var in failed_vars:
                 continue
-            if not var_years and config['freq'] == 'mon':
-                continue  # monthly data are already merged, while daily means are recomputed
+            if not var_years and config['freq'] not in HOURS_STEP:
+                continue  # nothing new, while daily means of sub-daily data are recomputed
             try:
                 files, fails = postprocess_variable(config, var, var_years)
             except Exception as exc:

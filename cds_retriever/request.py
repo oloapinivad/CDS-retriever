@@ -7,13 +7,19 @@ import calendar
 import re
 
 DATASETS = ('ERA5', 'ERA5-Land')
-FREQS = ('instant', '1hr', '3hrs', '6hrs', 'mon')
+FREQS = ('instant', '1hr', '3hrs', '6hrs', 'day', 'daymin', 'daymax', 'daysum', 'mon')
 GRIDS = ('full', '0.1x0.1', '0.25x0.25', '0.5x0.5', '1x1', '2.5x2.5')
 PRODUCT_TYPES = ('reanalysis', 'ensemble_members', 'ensemble_mean', 'ensemble_spread')
 REQUEST_MODES = ('auto', 'yearly', 'monthly')
 
 # hours between two consecutive steps for sub-daily frequencies
 HOURS_STEP = {'1hr': 1, '3hrs': 3, '6hrs': 6}
+
+# daily statistics computed by the CDS from the hourly data, in UTC days
+# (derived-era5-*-daily-statistics datasets, delivered as netCDF)
+DAILY_STATISTICS = {'day': 'daily_mean', 'daymin': 'daily_minimum', 'daymax': 'daily_maximum',
+                    'daysum': 'daily_sum'}
+DAILY_PRODUCT_TYPES = ('reanalysis', 'ensemble_members', 'ensemble_mean')
 
 PLEVS = {
     'ERA5': ['1', '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '125',
@@ -162,6 +168,16 @@ def level_label(levelout):
     return str(levelout)
 
 
+def is_daily(freq):
+    """True for the daily statistics computed by the CDS"""
+    return freq in DAILY_STATISTICS
+
+
+def download_suffix(freq):
+    """Extension of the downloaded files: daily statistics are only available as netCDF"""
+    return '.nc' if is_daily(freq) else '.grib'
+
+
 def dataset_id(dataset, level_kind, freq):
     """Return the CDS dataset (process) identifier"""
     if dataset == 'ERA5':
@@ -173,6 +189,10 @@ def dataset_id(dataset, level_kind, freq):
     else:
         raise ValueError(f'Unknown dataset {dataset} requested, options are {DATASETS}')
 
+    if is_daily(freq):
+        if freq == 'daysum' and level_kind != 'single-levels':
+            raise ValueError('daily sums (daysum) are available only on single levels')
+        return 'derived-' + name.removeprefix('reanalysis-') + '-daily-statistics'
     if freq == 'mon':
         name = name + '-monthly-means'
     return name
@@ -184,7 +204,7 @@ def define_time(freq, product_type='reanalysis'):
 
     Returns:
         tuple: (product_type, day, time), day is None for monthly means
-            since that dataset has no day selection.
+            since that dataset has no day selection, time is None for daily statistics.
     """
     if freq not in FREQS:
         raise ValueError(f'Unknown frequency {freq} requested, options are {FREQS}')
@@ -201,10 +221,16 @@ def define_time(freq, product_type='reanalysis'):
             raise ValueError(f'product_type {product_type} not available for monthly means')
         return product_type, None, ['00:00']
 
+    days = [str(i).zfill(2) for i in range(1, 32)]
+    if is_daily(freq):
+        if product_type not in DAILY_PRODUCT_TYPES:
+            raise ValueError(f'product_type {product_type} not available for daily statistics, '
+                             f'options are {DAILY_PRODUCT_TYPES}')
+        return product_type, days, None
+
     if product_type != 'reanalysis' and freq == '1hr':
         raise ValueError('ERA5 ensemble products are 3-hourly: use 3hrs or 6hrs')
 
-    days = [str(i).zfill(2) for i in range(1, 32)]
     if freq == 'instant':
         return product_type, ['01'], ['00:00']
 
@@ -217,6 +243,8 @@ def expected_steps(freq, year, months):
     if freq in ('mon', 'instant'):
         return len(months)
     ndays = sum(calendar.monthrange(int(year), int(m))[1] for m in months)
+    if is_daily(freq):
+        return ndays
     return ndays * 24 // HOURS_STEP[freq]
 
 
@@ -234,6 +262,7 @@ def build_request(dataset, var, freq, years, months, grid='full', levelout='sfc'
                   area='global', product_type='reanalysis'):
     """
     Build a CDS API request following the current (2024+) CDS interface.
+    Daily statistics are computed from the hourly data in UTC days, and delivered as netCDF.
 
     Parameters:
         years, months: str or list of str
@@ -256,17 +285,25 @@ def build_request(dataset, var, freq, years, months, grid='full', levelout='sfc'
     request['month'] = as_list(months)
     if day is not None:
         request['day'] = day
-    request['time'] = time
+    if time is not None:
+        request['time'] = time
+    if is_daily(freq):
+        request['daily_statistic'] = DAILY_STATISTICS[freq]
+        request['time_zone'] = 'utc+00:00'
+        request['frequency'] = '1_hourly'
     if levels is not None:
         request['pressure_level'] = levels
     if grid != 'full':
+        if is_daily(freq):
+            raise ValueError('grid selection is not available for daily statistics: use grid: full')
         # 'grid' is not in the web form, but it is still honoured by the MARS backend
         gridapi = grid.split('x')[0]
         request['grid'] = [gridapi, gridapi]
     if area != 'global':
         request['area'] = [float(x) for x in area]
-    request['data_format'] = 'grib'
-    request['download_format'] = 'unarchived'
+    if not is_daily(freq):
+        request['data_format'] = 'grib'
+        request['download_format'] = 'unarchived'
 
     return name, request
 

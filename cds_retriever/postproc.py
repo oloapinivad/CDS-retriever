@@ -16,12 +16,13 @@ _YEARS_RE = re.compile(r'^(\d{4})(?:-(\d{4}))?')
 
 
 def year_convert(infile, outfile, debug=False):
-    """Convert with CDO (ecCodes backend) a GRIB file to compressed netCDF4"""
+    """Convert with CDO a GRIB file (ecCodes backend) or a netCDF file to compressed netCDF4"""
     outfile = Path(outfile)
     tmpfile = outfile.with_name(outfile.name + '.part')
     cdo = get_cdo()
     cdo.debug = debug
-    cdo.copy(input=str(infile), output=str(tmpfile), options=NC_OPTIONS + ' --eccodes')
+    grib = Path(infile).suffix == '.grib'
+    cdo.copy(input=str(infile), output=str(tmpfile), options=NC_OPTIONS + (' --eccodes' if grib else ''))
     tmpfile.replace(outfile)
     return outfile
 

@@ -96,6 +96,29 @@ def test_retrieve_grouped(base, backend, tmp_path):
     assert root.handlers == handlers and root.level == level
 
 
+def test_retrieve_daily_statistics(base, backend, tmp_path):
+    """Daily statistics: one netCDF request per variable and year (never grouped), yearly files kept"""
+    result = retrieve(dict(base, freq='daymax', varlist=['2m_temperature', 'total_precipitation']))
+    names = [name for name, _ in backend['requests']]
+    assert names == ['derived-era5-single-levels-daily-statistics'] * 4
+    assert [r['variable'] for _, r in backend['requests']] == [['2m_temperature']] * 2 + [['total_precipitation']] * 2
+    assert all(r['daily_statistic'] == 'daily_maximum' for _, r in backend['requests'])
+    assert (tmp_path / 'tmp' / '2m_temperature' / 'ERA5_2m_temperature_daymax_full_sfc_2000.nc').exists()
+    t2m = result.files['2m_temperature']
+    assert [f.name for f in t2m] == [f'ERA5_2m_temperature_daymax_full_sfc_{y}.nc' for y in (2000, 2001)]
+    assert t2m[0].parent == tmp_path / 'store' / '2m_temperature' / 'daymax'
+    assert not (tmp_path / 'store' / '2m_temperature' / 'day').exists()  # no daily mean of daily data
+
+
+@pytest.mark.parametrize('changes, match', [
+    ({'freq': 'day', 'grid': '1x1'}, 'grid selection'),
+    ({'freq': 'daysum', 'levelout': 'plev8'}, 'only on single levels'),
+])
+def test_daily_config_errors(base, changes, match):
+    with pytest.raises(ValueError, match=match):
+        load_config(dict(base, **changes))
+
+
 def test_retrieve_no_grouping(base, backend):
     del base['year']  # not needed with explicit years
     result = retrieve(dict(base, group_variables=False), variables=['2m_temperature', 'total_precipitation'],
@@ -148,6 +171,8 @@ def test_update_uses_cds_availability(base, backend, monkeypatch, tmp_path):
     (datetime.date(2025, 11, 1), 'mon', 2024),
     (datetime.date(2025, 12, 31), '1hr', 2025),
     (datetime.date(2025, 12, 30), '1hr', 2024),
+    (datetime.date(2025, 12, 31), 'day', 2025),
+    (datetime.date(2026, 10, 14), 'day', 2025),
 ])
 def test_last_complete_year(base, monkeypatch, last, freq, expected):
     monkeypatch.setattr(runner, 'last_available', lambda *args: last)
@@ -188,6 +213,12 @@ def test_split_by_param(tmp_path):
 @pytest.mark.network
 def test_last_available_live():
     last = api.last_available('ERA5', 'mon', 'sfc')
+    assert datetime.date(2025, 1, 1) < last <= datetime.date.today()
+
+
+@pytest.mark.network
+def test_last_available_daily_live():
+    last = api.last_available('ERA5', 'day', 'plev8')
     assert datetime.date(2025, 1, 1) < last <= datetime.date.today()
 
 

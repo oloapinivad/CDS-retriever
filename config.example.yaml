@@ -12,8 +12,10 @@ year :
   end : 2022
   update : False    # Option to extend current dataset. This will supersede the begin/end values
 
-freq : 'mon'    # Data frequency. Available options: 'instant', '1hr', '3hrs', '6hrs', 'mon'.
-                # Beware of 'instant' (first hour of each month). 'mon' gets monthly means.
+freq : 'mon'    # Data frequency. Available options: 'instant', '1hr', '3hrs', '6hrs', 'day', 'daymin',
+                # 'daymax', 'daysum', 'mon'. Beware of 'instant' (first hour of each month).
+                # 'mon' gets monthly means; 'day*' daily statistics computed by the CDS (netCDF,
+                # grid: full, at most 12 pressure levels, daysum on single levels only).
 levelout : 'sfc'    # Vertical levels. Available option: 'sfc', 'plev37', 'plev19', 'plev8',
                     # a single pressure level (e.g. '500hPa') or a list (e.g. ['500hPa', '850hPa']).
 grid : 'full'    # Grid selection. Available options: 'full', '0.1x0.1', '0.25x0.25', '0.5x0.5', '1x1', '2.5x2.5'.
