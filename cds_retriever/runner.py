@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .api import estimate_cost, last_available, validate_request
-from .config import load_config
+from .config import load_config, validate_config
 from .download import (choose_request_mode, concat_months, group_retrieve, is_year_complete,
                        month_retrieve, year_retrieve)
 from .postproc import align_time, daily_mean, merge_monthly, which_new_years_download, year_convert
@@ -300,9 +300,13 @@ def retrieve(config, *, variables=None, years=None, dry_run=False):
         ValueError: invalid configuration or request.
         RetrievalError: some jobs failed (the files produced anyway are in its result).
     """
-    config = load_config(config)
+    config = load_config(config, validate=False)
     if variables is not None:
         config['varlist'] = [variables] if isinstance(variables, str) else list(variables)
+    if years is not None:
+        years = sorted(int(y) for y in years)
+        config['year'] = {'begin': years[0], 'end': years[-1], 'update': False}
+    config = validate_config(config)
     result = RetrieveResult(config)
     update = years is None and config['year']['update']
     last_year = last_complete_year(config) if update else None

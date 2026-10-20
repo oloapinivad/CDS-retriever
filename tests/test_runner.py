@@ -97,8 +97,10 @@ def test_retrieve_grouped(base, backend, tmp_path):
 
 
 def test_retrieve_no_grouping(base, backend):
-    retrieve(dict(base, group_variables=False), variables=['2m_temperature', 'total_precipitation'],
-             years=[2005])
+    del base['year']  # not needed with explicit years
+    result = retrieve(dict(base, group_variables=False), variables=['2m_temperature', 'total_precipitation'],
+                      years=[2005])
+    assert result.config['year'] == {'begin': 2005, 'end': 2005, 'update': False}
     assert [r['variable'] for _, r in backend['requests']] == [['2m_temperature'], ['total_precipitation']]
     assert all(r['year'] == ['2005'] for _, r in backend['requests'])
 
