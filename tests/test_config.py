@@ -50,4 +50,4 @@ def test_missing_required(tmp_path):
 
 def test_template_is_valid():
     from pathlib import Path
-    validate_config(load_config(Path(__file__).parents[1] / 'config.tmpl'))
+    validate_config(load_config(Path(__file__).parents[1] / 'config.example.yaml'))

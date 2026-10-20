@@ -12,6 +12,9 @@ It is built on top of:
 ## Main features
 
 - Parallelization is performed on a **yearly basis**.
+- Variables sharing the same properties are **downloaded with a single request** per year when it fits
+  the CDS size limit (`group_variables: auto`), then split per variable: the CDS queues every request,
+  so e.g. 30 monthly-mean variables take one request per year instead of 30.
 - Requests are **validated against the CDS catalogue** before downloading (variable names, years, levels...),
   so that mistakes are reported immediately instead of after hours in the queue.
 - Request size is checked with the CDS cost estimate: with `download_request: auto` yearly requests
@@ -52,7 +55,7 @@ conda activate CDS-retriever
 ```
 
 2. Set the options in the config file (see below for a list of the currently implemented options).
-You can set up your config file depending on the data you need starting from the provided template `config.tmpl`
+You can set up your config file depending on the data you need starting from the provided example `config.example.yaml`
 
 3. Check your configuration without downloading anything: requests are validated and their cost is shown
 
@@ -109,9 +112,35 @@ the **command-line argument takes precedence.**
 | `download_request`   | `str`               | Chunking mode for retrieval. Options: **`'auto'`** (default), **`'yearly'`**, **`'monthly'`**. |
 | `retries`            | `int`               | Attempts for each request before giving up (default 3).                            |
 | `check_request`      | `bool`              | Validate requests against the CDS catalogue before downloading (default **`True`**). |
+| `group_variables`    | `str`/`bool`        | **`'auto'`** (default): one request per year for all the variables (with the same years to retrieve) if within the CDS size limit, split afterwards with ecCodes `grib_copy`. **`False`**: one request per variable. |
 | `do_retrieve`        | `bool`              | If **`True`**, performs download from the Climate Data Store.                      |
 | `do_postproc`        | `bool`              | If **`True`**, runs postprocessing with **CDO**.                                   |
 | `do_align`           | `bool`              | If **`True`**, aligns monthly time axes (to 00:00) for **Xarray** compatibility.   |
+| `merge`              | `bool`              | If **`True`** (default), monthly data are merged in a single multi-year file; otherwise yearly files are kept. |
+
+## Use as a library
+
+`retrieve` takes the same configuration as a dictionary (or the path of a YAML file), with the
+defaults filled in, and returns the requests made and the netCDF files produced for each variable:
+
+```python
+from cds_retriever import retrieve, last_available, RetrievalError
+
+print(last_available('ERA5', freq='mon', levelout='sfc'))   # e.g. 2026-09-01, from the CDS catalogue
+
+result = retrieve({'tmpdir': '/scratch/era5', 'storedir': '/data/era5',
+                   'varlist': ['2m_temperature', 'total_precipitation'],
+                   'merge': False}, years=[2024, 2025])
+result.files      # {'2m_temperature': [Path('.../ERA5_2m_temperature_mon_full_sfc_2024.nc'), ...], ...}
+result.requests   # one Request per CDS request group, with its cost when known
+```
+
+- `variables=` and `years=` override `varlist` and `year`; `dry_run=True` only validates and
+  prices the requests.
+- Failures raise `RetrievalError`, with `failures` (job label -> exception) and `result` (what was
+  produced anyway). Invalid configurations raise `ValueError`.
+- The library never configures logging: messages go to the `cds_retriever` logger.
+- In update mode the last year retrieved is the last complete year published on the CDS.
 
 ## Output
 

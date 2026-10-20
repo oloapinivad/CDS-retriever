@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from cds_retriever import cli
+from cds_retriever import runner
 from cds_retriever import download as dl
 
 
@@ -91,11 +91,11 @@ def test_retrieve_variable_monthly(tmp_path, fake_backend, config, monkeypatch):
         calls.append((func.__name__, [label for label, _ in jobs]))
         return serial_run(func, jobs, nprocs)
 
-    monkeypatch.setattr(cli, 'run_parallel', recording_run)
+    monkeypatch.setattr(runner, 'run_parallel', recording_run)
     (tmp_path / 'ERA5_t_1hr_full_plev37_2000.grib').write_text('done')
     (tmp_path / 'ERA5_t_1hr_full_plev37_2001_month05.grib').write_text('grib')
 
-    failures = cli.retrieve_variable(config, 't', ['2000', '2001', '2002'], 'monthly', tmp_path)
+    failures = runner.retrieve_variable(config, 't', ['2000', '2001', '2002'], 'monthly', tmp_path)
     assert failures == {}
     # complete years are skipped, all the other months go to the pool at once
     assert calls[0][0] == 'month_retrieve' and len(calls[0][1]) == 24
@@ -107,7 +107,7 @@ def test_retrieve_variable_monthly(tmp_path, fake_backend, config, monkeypatch):
 
 
 def test_retrieve_variable_monthly_failure(tmp_path, fake_backend, config, monkeypatch):
-    monkeypatch.setattr(cli, 'run_parallel', serial_run)
+    monkeypatch.setattr(runner, 'run_parallel', serial_run)
     original = dl.download
 
     def flaky_download(name, request, target, retries=3, client=None):
@@ -116,7 +116,7 @@ def test_retrieve_variable_monthly_failure(tmp_path, fake_backend, config, monke
         original(name, request, target, retries=retries, client=client)
 
     monkeypatch.setattr(dl, 'download', flaky_download)
-    failures = cli.retrieve_variable(config, 't', ['2000', '2001'], 'monthly', tmp_path)
+    failures = runner.retrieve_variable(config, 't', ['2000', '2001'], 'monthly', tmp_path)
     assert list(failures) == ['t 2001-07 retrieve']
     # the complete year is concatenated, the chunks of the failed one are kept
     assert (tmp_path / 'ERA5_t_1hr_full_plev37_2000.grib').exists()
@@ -125,8 +125,8 @@ def test_retrieve_variable_monthly_failure(tmp_path, fake_backend, config, monke
 
 
 def test_retrieve_variable_yearly(tmp_path, fake_backend, config, monkeypatch):
-    monkeypatch.setattr(cli, 'run_parallel', serial_run)
-    assert cli.retrieve_variable(config, 't', ['2000', '2001'], 'yearly', tmp_path) == {}
+    monkeypatch.setattr(runner, 'run_parallel', serial_run)
+    assert runner.retrieve_variable(config, 't', ['2000', '2001'], 'yearly', tmp_path) == {}
     assert [r[1]['month'] for r in fake_backend] == [[f'{m:02d}' for m in range(1, 13)]] * 2
 
 

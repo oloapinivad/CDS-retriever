@@ -3,6 +3,7 @@
 import argparse
 import copy
 import logging
+from collections.abc import Mapping
 
 import yaml
 
@@ -25,7 +26,10 @@ DEFAULTS = {
     'do_retrieve': True,
     'do_postproc': True,
     'do_align': False,
+    'merge': True,
+    'group_variables': 'auto',
 }
+GROUP_MODES = ('auto', False)
 REQUIRED = ('tmpdir', 'storedir', 'varlist')
 
 
@@ -60,18 +64,27 @@ def _merge(defaults, config):
     return merged
 
 
-def load_config(file_path):
+def load_config(source, validate=True):
     """
-    Load the YAML configuration file and fill in defaults.
+    Build a configuration from a YAML file or a dictionary, filling in the defaults.
+
+    Parameters:
+        source (str, Path or dict): path of the YAML file, or the configuration itself
+            (not modified, a copy is returned).
+        validate (bool): validate the configuration (see validate_config).
 
     Returns:
-        dict: configuration (not yet validated)
+        dict: the configuration
     """
-    with open(file_path, 'r', encoding='utf8') as file:
-        config = yaml.safe_load(file) or {}
-    if not isinstance(config, dict):
-        raise ValueError(f'{file_path} is not a valid configuration file')
-    return _merge(DEFAULTS, config)
+    if isinstance(source, Mapping):
+        config = dict(source)
+    else:
+        with open(source, 'r', encoding='utf8') as file:
+            config = yaml.safe_load(file) or {}
+        if not isinstance(config, dict):
+            raise ValueError(f'{source} is not a valid configuration file')
+    config = _merge(DEFAULTS, config)
+    return validate_config(config) if validate else config
 
 
 def apply_args(config, args):
@@ -106,8 +119,10 @@ def validate_config(config):
     if isinstance(config.get('varlist'), str):
         config['varlist'] = [config['varlist']]
 
-    choices = {'dataset': DATASETS, 'freq': FREQS, 'grid': GRIDS,
-               'product_type': PRODUCT_TYPES, 'download_request': REQUEST_MODES}
+    if config['group_variables'] is True:
+        config['group_variables'] = 'auto'
+    choices = {'dataset': DATASETS, 'freq': FREQS, 'grid': GRIDS, 'product_type': PRODUCT_TYPES,
+               'download_request': REQUEST_MODES, 'group_variables': GROUP_MODES}
     for key, allowed in choices.items():
         if config[key] not in allowed:
             errors.append(f'{key}: {config[key]} is not valid, options are {allowed}')
@@ -160,7 +175,9 @@ def print_config(conf_dict):
         'Actions: ' + ', '.join(name for name, flag in [
             ('retrieve', conf_dict['do_retrieve']),
             ('postproc', conf_dict['do_postproc']),
-            ('align monthly time axis', conf_dict['do_align'])] if flag),
+            ('align monthly time axis', conf_dict['do_align']),
+            ('merge monthly files', conf_dict['merge'] and conf_dict['freq'] == 'mon')] if flag),
+        f"Group variables in a single request: {conf_dict['group_variables']}",
     ]
     for line in lines:
         log.info(line)

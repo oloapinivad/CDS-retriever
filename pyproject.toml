@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cds-retriever"
-version = "0.2.0"
+version = "0.3.0"
 description = "Parallel retrieval and postprocessing of ERA5 / ERA5-Land data from the Copernicus Climate Data Store"
 readme = "README.md"
 license = { file = "LICENSE" }

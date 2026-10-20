@@ -26,6 +26,78 @@ PLEVS = {
 }
 PLEVS['plev37'] = PLEVS['ERA5']
 
+# ecCodes paramId of the ERA5 variables (CDS names), used to split requests with several
+# variables into one file per variable. paramIds do not change across ecCodes versions,
+# unlike short names (e.g. sea ice cover: 'ci' or 'siconc').
+# Variables not listed here are always downloaded with their own request.
+PARAM_IDS = {
+    # single levels
+    '10m_u_component_of_wind': 165,
+    '10m_v_component_of_wind': 166,
+    '10m_wind_speed': 207,
+    '2m_dewpoint_temperature': 168,
+    '2m_temperature': 167,
+    'boundary_layer_height': 159,
+    'convective_precipitation': 143,
+    'eastward_turbulent_surface_stress': 180,
+    'evaporation': 182,
+    'high_cloud_cover': 188,
+    'land_sea_mask': 172,
+    'large_scale_precipitation': 142,
+    'low_cloud_cover': 186,
+    'mean_sea_level_pressure': 151,
+    'medium_cloud_cover': 187,
+    'northward_turbulent_surface_stress': 181,
+    'runoff': 205,
+    'sea_ice_cover': 31,
+    'sea_surface_temperature': 34,
+    'skin_temperature': 235,
+    'snow_depth': 141,
+    'snowfall': 144,
+    'soil_temperature_level_1': 139,
+    'soil_temperature_level_2': 170,
+    'soil_temperature_level_3': 183,
+    'soil_temperature_level_4': 236,
+    'surface_latent_heat_flux': 147,
+    'surface_net_solar_radiation': 176,
+    'surface_net_solar_radiation_clear_sky': 210,
+    'surface_net_thermal_radiation': 177,
+    'surface_net_thermal_radiation_clear_sky': 211,
+    'surface_pressure': 134,
+    'surface_sensible_heat_flux': 146,
+    'surface_solar_radiation_downwards': 169,
+    'surface_thermal_radiation_downwards': 175,
+    'toa_incident_solar_radiation': 212,
+    'top_net_solar_radiation': 178,
+    'top_net_solar_radiation_clear_sky': 208,
+    'top_net_thermal_radiation': 179,
+    'top_net_thermal_radiation_clear_sky': 209,
+    'total_cloud_cover': 164,
+    'total_column_ozone': 206,
+    'total_column_water': 136,
+    'total_column_water_vapour': 137,
+    'total_precipitation': 228,
+    'volumetric_soil_water_layer_1': 39,
+    'volumetric_soil_water_layer_2': 40,
+    'volumetric_soil_water_layer_3': 41,
+    'volumetric_soil_water_layer_4': 42,
+    # pressure levels
+    'divergence': 155,
+    'fraction_of_cloud_cover': 248,
+    'geopotential': 129,
+    'ozone_mass_mixing_ratio': 203,
+    'potential_vorticity': 60,
+    'relative_humidity': 157,
+    'specific_cloud_ice_water_content': 247,
+    'specific_cloud_liquid_water_content': 246,
+    'specific_humidity': 133,
+    'temperature': 130,
+    'u_component_of_wind': 131,
+    'v_component_of_wind': 132,
+    'vertical_velocity': 135,
+    'vorticity': 138,
+}
+
 _LEVEL_PATTERN = re.compile(r'^(\d+)(hPa)?$')
 
 

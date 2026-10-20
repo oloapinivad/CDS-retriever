@@ -1,12 +1,15 @@
 """Download ERA5 data from the CDS"""
 
+import hashlib
 import logging
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
 from .api import estimate_cost
 from .cdo_utils import get_cdo, ntime
-from .request import build_request, create_filename, expected_steps, month_chunks
+from .request import PARAM_IDS, build_request, create_filename, expected_steps, month_chunks
 
 log = logging.getLogger(__name__)
 
@@ -201,3 +204,90 @@ def year_retrieve(dataset, var, freq, year, grid, levelout, area, outdir,
                        month_file(yearfile, month), product_type=product_type, retries=retries,
                        client=client)
     return concat_months(dataset, var, freq, year, grid, levelout, area, outdir)
+
+
+class SplitError(RuntimeError):
+    """A file with several variables does not contain the expected parameters"""
+
+
+def split_by_param(infile, targets):
+    """
+    Split a GRIB file with several variables into one file per variable (ecCodes grib_copy).
+
+    Parameters:
+        infile: GRIB file
+        targets (dict): paramId -> output file
+
+    Raises:
+        SplitError: if the parameters in the file are not exactly the expected ones
+            (nothing is written in that case).
+    """
+    infile = Path(infile)
+    grib_copy = shutil.which('grib_copy')
+    if grib_copy is None:
+        raise RuntimeError('grib_copy (ecCodes) not found: it is needed to split grouped requests')
+    splitdir = infile.with_name(infile.stem + '_split')
+    shutil.rmtree(splitdir, ignore_errors=True)
+    splitdir.mkdir()
+    try:
+        subprocess.run([grib_copy, str(infile), str(splitdir / '[paramId].grib')],
+                       check=True, capture_output=True, text=True)
+        found = {int(f.stem): f for f in splitdir.glob('*.grib')}
+        if set(found) != set(targets):
+            raise SplitError(f'{infile.name}: expected paramIds {sorted(targets)}, found {sorted(found)}')
+        for param, target in targets.items():
+            found[param].replace(target)
+    finally:
+        shutil.rmtree(splitdir, ignore_errors=True)
+    return list(targets.values())
+
+
+def group_file(tmpdir, dataset, variables, freq, grid, levelout, area, year):
+    """Path of the GRIB file of a grouped request, named after a hash of its variables"""
+    tag = hashlib.sha1(','.join(sorted(variables)).encode()).hexdigest()[:8]
+    return Path(tmpdir, '_groups', create_filename(dataset, f'group-{tag}', freq, grid, levelout, area, year) + '.grib')
+
+
+def group_retrieve(dataset, variables, freq, year, grid, levelout, area, tmpdir,
+                   product_type='reanalysis', retries=3):
+    """
+    Download a year of several variables with a single request, then split it into
+    the yearly GRIB file of each variable (<tmpdir>/<var>/), as written by year_retrieve.
+
+    The CDS queues every request separately, so for small requests (e.g. monthly means)
+    one request for many variables is much faster than one request per variable.
+    Variables must be listed in PARAM_IDS. If the file cannot be split as expected,
+    the variables are downloaded again one by one.
+
+    Returns:
+        list of Path: the yearly GRIB files
+    """
+    year = str(year)
+    files = {var: year_file(Path(tmpdir, var), dataset, var, freq, grid, levelout, area, year)
+             for var in variables}
+    for f in files.values():
+        f.parent.mkdir(parents=True, exist_ok=True)
+    todo = [var for var in variables
+            if not is_year_complete(Path(tmpdir, var), dataset, var, freq, grid, levelout, area, year)]
+    if not todo:
+        return list(files.values())
+
+    months = month_chunks('yearly')[0]
+    groupfile = group_file(tmpdir, dataset, todo, freq, grid, levelout, area, year)
+    groupfile.parent.mkdir(parents=True, exist_ok=True)
+    chunk_retrieve(dataset, todo, freq, year, months, grid, levelout, area, groupfile,
+                   product_type=product_type, retries=retries)
+    try:
+        split_by_param(groupfile, {PARAM_IDS[var]: files[var] for var in todo})
+    except SplitError as exc:
+        log.warning('%s: downloading the variables one by one', exc)
+        for var in todo:
+            year_retrieve(dataset, var, freq, year, grid, levelout, area, Path(tmpdir, var),
+                          product_type=product_type, retries=retries)
+    groupfile.unlink(missing_ok=True)
+
+    steps = expected_steps(freq, year, months)
+    incomplete = [files[var].name for var in todo if not is_file_complete(files[var], steps)]
+    if incomplete:
+        raise RuntimeError(f'Incomplete files after splitting {groupfile.name}: {", ".join(incomplete)}')
+    return list(files.values())

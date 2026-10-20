@@ -1,16 +1,20 @@
-"""Query the public CDS catalogue: request validation and cost estimation.
+"""Query the public CDS catalogue: request validation, cost estimation and data availability.
 
 The CDS (2024+ infrastructure, OGC API Processes) exposes, without authentication:
   - GET  <url>/retrieve/v1/processes/<dataset>          inputs schema (allowed keys and values)
   - POST <url>/retrieve/v1/processes/<dataset>/costing  request size and limit
+  - GET  <url>/catalogue/v1/collections/<dataset>       metadata, including the time extent
 """
 
+import datetime
 import json
 import logging
 import os
 import urllib.request
 from functools import lru_cache
 from pathlib import Path
+
+from .request import dataset_id, define_level
 
 DEFAULT_URL = 'https://cds.climate.copernicus.eu/api'
 
@@ -87,3 +91,36 @@ def estimate_cost(dataset, request, url=None):
     request = {k: v for k, v in request.items() if k not in EXTRA_KEYS}
     result = _call(f'{url}/retrieve/v1/processes/{dataset}/costing', {'inputs': request})
     return float(result['cost']), float(result['limit'])
+
+
+def get_collection(dataset, url=None):
+    """Return the catalogue entry of a dataset (not cached: it changes with every data release)"""
+    url = url or api_url()
+    return _call(f'{url}/catalogue/v1/collections/{dataset}')
+
+
+def available_until(name, url=None):
+    """
+    Date of the last time step published for a CDS dataset identifier
+    (e.g. 'reanalysis-era5-single-levels-monthly-means'), from the catalogue time extent.
+
+    Returns:
+        datetime.date
+    """
+    intervals = get_collection(name, url=url)['extent']['temporal']['interval']
+    ends = [interval[1] for interval in intervals if interval[1]]
+    if not ends:
+        raise ValueError(f'No end date in the time extent of {name}')
+    return max(datetime.date.fromisoformat(end[:10]) for end in ends)
+
+
+def last_available(dataset='ERA5', freq='mon', levelout='sfc', url=None):
+    """
+    Last date available on the CDS for an ERA5 / ERA5-Land configuration.
+    For monthly means it is the first day of the last month available.
+
+    Returns:
+        datetime.date
+    """
+    _, level_kind = define_level(levelout)
+    return available_until(dataset_id(dataset, level_kind, freq), url=url)

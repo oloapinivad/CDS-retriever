@@ -28,8 +28,12 @@ download_request : 'auto'    # 'auto': yearly requests if within the CDS size li
                              # 'yearly' or 'monthly' to force the chunk size.
 retries : 3    # Number of attempts for each request
 check_request : True    # Validate the request against the CDS catalogue before downloading
+group_variables : 'auto'    # 'auto': variables with the same years are downloaded with a single request
+                            # per year when it fits the CDS size limit (much faster for monthly means,
+                            # since the CDS queues each request). False: one request per variable.
 
 #### - control for the structure --- ###
 do_retrieve : True    # Retrieve data from CDS
 do_postproc : True    # Postproc data with CDO
 do_align : True    # Set equal time axis to monthly data to work with Xarray
+merge : True    # Merge yearly monthly-mean files into a single file (False: keep the yearly files)
