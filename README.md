@@ -131,8 +131,10 @@ They are a few days behind the hourly data.
 - The CDS delivers netCDF: a single file for one variable, a zip with one file per variable for
   several (a zip with a single file is unpacked). The downloaded files are `.nc` and they are
   never grouped: one request per variable. The files
-  are written by cfgrib: `valid_time` axis and cfgrib names (`t2m`, `tp`), not the ecCodes short
-  names of the converted GRIB files (`2t`).
+  are written by cfgrib (`valid_time`, `latitude`, `longitude`, `t2m`): they are converted to
+  GRIB1 (24 bits, with the `GRIB_paramId` of the variable) and back to netCDF4 as the GRIB
+  files are, so that they get the same names (`time`, `lat`, `lon`, `plev` in Pa, ecCodes short
+  names such as `2t`). A parameter without a GRIB1 code is an error.
 - `day` is the mean of the hourly values: for accumulated fields (e.g. `total_precipitation`)
   use `daysum` to get daily totals. Accumulations are shifted by one hour by the CDS, so that each
   day collects the steps ending within it.

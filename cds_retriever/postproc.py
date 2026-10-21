@@ -12,18 +12,60 @@ from .request import create_filename
 log = logging.getLogger(__name__)
 
 NC_OPTIONS = '-f nc4 -z zip'
+GRIB_BITS = 24  # GRIB1 packing of netCDF files converted through GRIB
 _YEARS_RE = re.compile(r'^(\d{4})(?:-(\d{4}))?')
 
 
 def year_convert(infile, outfile, debug=False):
-    """Convert with CDO a GRIB file (ecCodes backend) or a netCDF file to compressed netCDF4"""
+    """
+    Convert with CDO a GRIB file (ecCodes backend) to compressed netCDF4.
+    A netCDF file (daily statistics, written by cfgrib) goes through GRIB first, so that it gets
+    the names of the converted GRIB files: time, lat, lon, plev and the ecCodes short name.
+    """
     outfile = Path(outfile)
     tmpfile = outfile.with_name(outfile.name + '.part')
     cdo = get_cdo()
     cdo.debug = debug
-    grib = Path(infile).suffix == '.grib'
-    cdo.copy(input=str(infile), output=str(tmpfile), options=NC_OPTIONS + (' --eccodes' if grib else ''))
+    if Path(infile).suffix == '.grib':
+        cdo.copy(input=str(infile), output=str(tmpfile), options=NC_OPTIONS + ' --eccodes')
+    else:
+        netcdf_via_grib(infile, tmpfile)
     tmpfile.replace(outfile)
+    return outfile
+
+
+def grib1_param(param_id):
+    """GRIB1 code.table of an ecCodes paramId, e.g. 167 -> 167.128, 228246 -> 246.228"""
+    table, code = divmod(int(param_id), 1000)
+    return f'{code}.{table or 128}'
+
+
+def netcdf_via_grib(infile, outfile):
+    """
+    Convert a netCDF file of one variable written by cfgrib (GRIB_paramId and GRIB_shortName
+    attributes) to netCDF4 through GRIB1, as the GRIB files are. The values are packed with
+    GRIB_BITS bits, enough for the float32 of the CDS files.
+    """
+    cdo = get_cdo()
+    names = cdo.showname(input=str(infile), options='-s')[0].split()
+    if len(names) != 1:
+        raise ValueError(f'{infile}: one variable expected, found {names}')
+    attrs = {}
+    for key in ('GRIB_paramId', 'GRIB_shortName'):
+        line = cdo.showattribute(f'{names[0]}@{key}', input=str(infile), options='-s')[-1]
+        attrs[key] = line.partition('=')[2].strip().strip('"')
+    grib = Path(outfile).with_name(Path(outfile).name + '.grib')
+    try:
+        cdo.copy(input=f'-setparam,{grib1_param(attrs["GRIB_paramId"])} {infile}', output=str(grib),
+                 options=f'-f grb -b {GRIB_BITS}')
+        cdo.copy(input=str(grib), output=str(outfile), options=NC_OPTIONS + ' --eccodes')
+    finally:
+        grib.unlink(missing_ok=True)
+    converted = cdo.showname(input=str(outfile), options='-s')[0].split()
+    if converted != [attrs['GRIB_shortName']]:
+        Path(outfile).unlink()
+        raise ValueError(f'{infile}: paramId {attrs["GRIB_paramId"]} has no GRIB1 code for '
+                         f'{attrs["GRIB_shortName"]}, the conversion gives {converted}')
     return outfile
 
 
