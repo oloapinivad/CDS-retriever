@@ -2,45 +2,76 @@
 **Tool for parallel retrieval of ECMWF ERA5 data from the Climate Data Store (CDS)**
 
 ## Overview
-CDS-retriever automates the parallel download and postprocessing of ERA5 data from the Climate Data Store (CDS).
+CDS-retriever automates the parallel download and postprocessing of ERA5 and ERA5-Land data from the Climate Data Store (CDS).
 
 It is built on top of:
 
-- `cdsapi` for data retrieval
+- `cdsapi` (>= 0.7.7, the client for the new CDS infrastructure) for data retrieval
 - `CDO` and its Python bindings for postprocessing
-
-Additional Python packages such as `netCDF4` and `xarray` are recommended (though not strictly required).
 
 ## Main features
 
 - Parallelization is performed on a **yearly basis**.
-- Post-processing converts the downloaded GRIB files to NetCDF format.
-- For monthly data, the script can merge files and optionally align the time axis.
-- For hourly data, daily mean files are optionally generated.
+- Variables sharing the same properties are **downloaded with a single request** per year when it fits
+  the CDS size limit (`group_variables: auto`), then split per variable: the CDS queues every request,
+  so e.g. 30 monthly-mean variables take one request per year instead of 30.
+- Requests are **validated against the CDS catalogue** before downloading (variable names, years, levels...),
+  so that mistakes are reported immediately instead of after hours in the queue.
+- Request size is checked with the CDS cost estimate: with `download_request: auto` yearly requests
+  are used when allowed, otherwise the year is split in monthly requests
+  (e.g. hourly data on 37 pressure levels exceed the CDS limit for a single year).
+  Monthly requests are run in parallel as independent (year, month) jobs and then concatenated per year.
+- Failed requests are retried; files are written atomically and checked for completeness, so
+  interrupted runs can be safely restarted and already downloaded files are skipped.
+- Errors in the parallel workers are reported and the program exits with a non-zero status.
+- Post-processing converts the downloaded GRIB files to compressed NetCDF4 format.
+- For monthly data, the script merges the yearly files and optionally aligns the time axis.
+- For sub-daily data, daily mean files are generated.
+- Daily statistics (mean, minimum, maximum, sum) can be retrieved directly: the CDS computes them
+  from the hourly data, so the hourly fields are not downloaded.
 
 ## Set-up
-Install the requested dependencies.
-It is recommended to use conda to isolate dependencies:
+It is recommended to use conda to isolate dependencies (CDO and ecCodes are not pip-installable):
 
 ```
-conda env create -f environnment.yaml -n CDS-retriever
+conda env create -f environment.yml
+```
+
+This installs the package in editable mode and provides the `cds-retriever` command.
+In an existing environment with CDO available you can also use `pip install -e .`.
+
+You need a CDS account: accept the licence of each dataset you want to download on its web page
+and set up your `~/.cdsapirc` with your Personal Access Token
+(see the [CDS API how-to](https://cds.climate.copernicus.eu/how-to-api)):
+
+```
+url: https://cds.climate.copernicus.eu/api
+key: <PERSONAL-ACCESS-TOKEN>
 ```
 
 ## Usage
-1. Be sure that all required dependecies are loaded, or equivalently , load the above created environment
+1. Activate the environment
 
 ```
 conda activate CDS-retriever
 ```
 
 2. Set the options in the config file (see below for a list of the currently implemented options).
-You can set up your config file dependign on the data you need starting from the provided template `config.tmpl`
+You can set up your config file depending on the data you need starting from the provided example `config.example.yaml`
 
-3. Run the main script with a configuration file:
+3. Check your configuration without downloading anything: requests are validated and their cost is shown
 
 ```
-./ERA5_retrieve_postproc.py -c <path-to-config-file>/config.yaml
+cds-retriever -c <path-to-config-file>/config.yaml --dry-run
 ```
+
+4. Run the retrieval and postprocessing:
+
+```
+cds-retriever -c <path-to-config-file>/config.yaml
+```
+
+The old `./ERA5_retrieve_postproc.py -c config.yaml` entry point is still available and equivalent.
 
 Optionally, you can override configuration options using command-line arguments:
 
@@ -48,37 +79,115 @@ Optionally, you can override configuration options using command-line arguments:
 |--------------------|-------------------------------------|
 | `-c`, `--config`   | Path to the YAML configuration file |
 | `-n`, `--nprocs`   | Number of parallel processes        |
-| `-u`, `--update`	 | Update existing dataset             |
+| `-u`, `--update`   | Update existing dataset             |
 | `-v`, `--variable` | Select a specific variable          |
 | `-l`, `--levelout` | Select a specific level             |
-| `--outputdir`	     | Specify output directory            |
-| `--tmpdir`	     | Specify temporary directory         |
+| `--outputdir`      | Specify output directory            |
+| `--tmpdir`         | Specify temporary directory         |
+| `--dry-run`        | Validate requests and show their cost, do not download |
+| `--loglevel`       | Logging level (`DEBUG`, `INFO`, `WARNING`) |
 
 Example:
 
 ```
-./ERA5_retrieve_postproc.py -c <path-to-config-file>/config.yaml -n 2 -l 500hPa
+cds-retriever -c <path-to-config-file>/config.yaml -n 2 -l 500hPa
 ```
-**Note:** If the same option is specified both in the configuration file and via command-line arguments, 
+**Note:** If the same option is specified both in the configuration file and via command-line arguments,
 the **command-line argument takes precedence.**
 
 ## Configuration Parameters
 
 | **Parameter**        | **Type**            | **Description**                                                                    |
 |----------------------|---------------------|------------------------------------------------------------------------------------|
-| `tmpdir`, `storedir` | `str`               | Paths for temporary download and final storage directories.                        |
-| `dataset`            | `str`               | Dataset to retrieve. Options: **`'ERA5'`**, **`'ERA5-Land'`**.                     |
+| `tmpdir`, `storedir` | `str`               | Paths for temporary download and final storage directories (required).             |
+| `dataset`            | `str`               | Dataset to retrieve. Options: **`'ERA5'`** (default), **`'ERA5-Land'`**.           |
+| `product_type`       | `str`               | **`'reanalysis'`** (default), or ERA5 ensemble **`'ensemble_members'`**, **`'ensemble_mean'`**, **`'ensemble_spread'`** (3-hourly). |
 | `varlist`            | `list[str]`         | List of variables to download (e.g., `['total_precipitation', '2m_temperature']`). All variables must share the same properties. |
 | `year.begin`         | `int`               | First year of the time range to retrieve.                                          |
 | `year.end`           | `int`               | Last year of the time range to retrieve.                                           |
-| `year.update`        | `bool`              | If **`True`**, the script extends an existing dataset instead of redownloading it. Overrides `year.begin` and `year.end`.  |
-| `freq`               | `str`               | Data frequency. Options: **`'instant'`**, **`'1hr'`**, **`'6hrs'`**, **`'mon'`** (`'mon'` = monthly means). | 
-| `levelout`           | `str`               | Vertical level selection. Options: **`'sfc'`**, **`'plev37'`**, **`'plev19'`**, **`'plev8'`**, a single level (e.g. **`'500hPa'`**). |
-| `grid`               | `str`               | Output grid resolution. Options: **`'full'`**, **`'0.1x0.1'`**, **`'0.25x0.25'`**, **`'2.5x2.5'`**. (`'full'` = native ERA5 grid). |
+| `year.update`        | `bool`              | If **`True`**, the script extends an existing dataset up to the last complete year. Overrides `year.begin` and `year.end`.  |
+| `freq`               | `str`               | Data frequency. Options: **`'instant'`**, **`'1hr'`**, **`'3hrs'`**, **`'6hrs'`**, **`'day'`**, **`'daymin'`**, **`'daymax'`**, **`'daysum'`**, **`'mon'`** (`'mon'` = monthly means, default). The `day*` options are daily statistics computed by the CDS, see below. |
+| `levelout`           | `str`/`list[str]`   | Vertical level selection. Options: **`'sfc'`** (default), **`'plev37'`**, **`'plev19'`**, **`'plev8'`**, a single level (e.g. **`'500hPa'`**) or a list of levels (e.g. **`['500hPa', '850hPa']`**). |
+| `grid`               | `str`               | Output grid resolution. Options: **`'full'`** (default, native grid), **`'0.1x0.1'`**, **`'0.25x0.25'`**, **`'0.5x0.5'`**, **`'1x1'`**, **`'2.5x2.5'`**. |
 | `area`               | `str`/`list[float]` | Geographic area for download. Either **`'global'`** or a list of coordinates `[North, West, South, East]`, e.g., `[65, -15, 25, 45]`. |
-| `nprocs`             | `int`               | Number of parallel processes.                                                      |
-| `download_request`   | `str`               | Chunking mode for retrieval. Options: **`'yearly'`**, **`'monthly'`**.             |
+| `nprocs`             | `int`               | Number of parallel processes (default 4), i.e. the maximum number of simultaneous CDS requests. Each job is a year, or a single month with monthly requests. Keep it moderate, since the CDS limits the queued requests per user. |
+| `download_request`   | `str`               | Chunking mode for retrieval. Options: **`'auto'`** (default), **`'yearly'`**, **`'monthly'`**. |
+| `retries`            | `int`               | Attempts for each request before giving up (default 3).                            |
+| `check_request`      | `bool`              | Validate requests against the CDS catalogue before downloading (default **`True`**). |
+| `group_variables`    | `str`/`bool`        | **`'auto'`** (default): one request per year for all the variables (with the same years to retrieve) if within the CDS size limit, split afterwards with ecCodes `grib_copy`. **`False`**: one request per variable. |
 | `do_retrieve`        | `bool`              | If **`True`**, performs download from the Climate Data Store.                      |
 | `do_postproc`        | `bool`              | If **`True`**, runs postprocessing with **CDO**.                                   |
-| `do_align`           | `bool`              | If **`True`**, aligns monthly time axes for **Xarray** compatibility.              |
+| `do_align`           | `bool`              | If **`True`**, aligns monthly time axes (to 00:00) for **Xarray** compatibility.   |
+| `merge`              | `bool`              | If **`True`** (default), monthly data are merged in a single multi-year file; otherwise yearly files are kept. |
 
+### Daily statistics
+
+`freq: day` (daily mean), `daymin`, `daymax` and `daysum` (daily sum, single levels only)
+retrieve the ERA5 and ERA5-Land post-processed daily statistics
+(`derived-era5-single-levels-daily-statistics`, `derived-era5-pressure-levels-daily-statistics`,
+`derived-era5-land-daily-statistics`). The CDS computes them from the hourly data, in UTC days.
+They are a few days behind the hourly data.
+
+- The CDS delivers netCDF: a single file for one variable, a zip with one file per variable for
+  several (a zip with a single file is unpacked). The downloaded files are `.nc` and they are
+  never grouped: one request per variable. The files
+  are written by cfgrib (`valid_time`, `latitude`, `longitude`, `t2m`): they are converted to
+  GRIB1 (24 bits, with the `GRIB_paramId` of the variable) and back to netCDF4 as the GRIB
+  files are, so that they get the same names (`time`, `lat`, `lon`, `plev` in Pa, ecCodes short
+  names such as `2t`). A parameter without a GRIB1 code is an error.
+- `day` is the mean of the hourly values: for accumulated fields (e.g. `total_precipitation`)
+  use `daysum` to get daily totals. Accumulations are shifted by one hour by the CDS, so that each
+  day collects the steps ending within it.
+- The CDS limit is 400 fields (days x levels) per request. One year of a single-level variable
+  fits in a yearly request. Pressure levels need monthly requests (chosen by `download_request:
+  auto`), and at most 12 levels: use `plev8` or a list of levels, not `plev19`/`plev37`.
+- `grid` must be `full`. Ensemble products are `ensemble_members` and `ensemble_mean`.
+- The yearly files are kept in `<storedir>/<variable>/<freq>/`, e.g.
+  `ERA5_2m_temperature_day_full_sfc_2024.nc`. `merge` applies to monthly data only.
+
+## Use as a library
+
+`retrieve` takes the same configuration as a dictionary (or the path of a YAML file), with the
+defaults filled in, and returns the requests made and the netCDF files produced for each variable:
+
+```python
+from cds_retriever import retrieve, last_available, RetrievalError
+
+print(last_available('ERA5', freq='mon', levelout='sfc'))   # e.g. 2026-09-01, from the CDS catalogue
+
+result = retrieve({'tmpdir': '/scratch/era5', 'storedir': '/data/era5',
+                   'varlist': ['2m_temperature', 'total_precipitation'],
+                   'merge': False}, years=[2024, 2025])
+result.files      # {'2m_temperature': [Path('.../ERA5_2m_temperature_mon_full_sfc_2024.nc'), ...], ...}
+result.requests   # one Request per CDS request group, with its cost when known
+```
+
+- `variables=` and `years=` override `varlist` and `year`; `dry_run=True` only validates and
+  prices the requests.
+- Failures raise `RetrievalError`, with `failures` (job label -> exception) and `result` (what was
+  produced anyway). Invalid configurations raise `ValueError`.
+- The library never configures logging: messages go to the `cds_retriever` logger.
+- In update mode the last year retrieved is the last complete year published on the CDS.
+
+## Output
+
+Downloaded GRIB files (netCDF for daily statistics) are kept in `<tmpdir>/<variable>/`, while netCDF files are stored in
+`<storedir>/<variable>/<freq>/` (and `<storedir>/<variable>/day/` for daily means), named as
+`<dataset>_<variable>_<freq>_<grid>_<levelout>_<years>[_<area>].nc`.
+
+The naming scheme is the same as in previous versions (checked by `tests/test_naming_compat.py`),
+so existing archives can be extended with `year.update` / `--update`.
+Daily means are recomputed from all the yearly sub-daily files, and the previous daily file
+of the same dataset is removed (e.g. `..._day_..._1979-2019.nc` replaced by `..._1979-2025.nc`),
+unless it covers years that are no longer available as sub-daily files.
+Exception: with an `area` selection, older versions wrote merged monthly and daily files with
+wrong years taken from the area string (e.g. `..._40-40_70_-20_30_40.nc`). The update reports
+these files: rename them with the actual years (e.g. `..._1940-2022_70_-20_30_40.nc`) and run again.
+
+## Development
+
+```
+pip install -e ".[test]"
+pytest                   # all tests
+pytest -m "not network"  # skip tests querying the public CDS catalogue
+```
