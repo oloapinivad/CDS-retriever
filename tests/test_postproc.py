@@ -1,4 +1,5 @@
 import datetime
+import shutil
 from pathlib import Path
 
 import pytest
@@ -87,3 +88,69 @@ def test_daily_mean_keeps_old_file_with_more_years(tmp_path, monkeypatch):
     postproc.daily_mean(tmp_path, 'ERA5', 'tcc', '6hrs', 'full', 'sfc', 'global')
     assert sorted(p.name for p in daydir.iterdir()) == [
         'ERA5_tcc_day_full_sfc_1979-2019.nc', 'ERA5_tcc_day_full_sfc_2015-2025.nc']
+
+
+@pytest.mark.parametrize('param_id, code', [(167, '167.128'), ('130', '130.128'), (228246, '246.228')])
+def test_grib1_param(param_id, code):
+    assert postproc.grib1_param(param_id) == code
+
+
+def cfgrib_netcdf(path, name, param_id, short_name, levels=None):
+    """A netCDF file as delivered by the CDS for daily statistics: cfgrib names and attributes"""
+    netCDF4 = pytest.importorskip('netCDF4')
+    np = pytest.importorskip('numpy')
+    lat, lon = np.arange(90, -90.1, -30.0), np.arange(0, 360, 60.0)
+    shape = (3,) + ((len(levels),) if levels else ()) + (len(lat), len(lon))
+    values = (200 + 100 * np.random.default_rng(0).random(shape)).astype('f4')
+    with netCDF4.Dataset(path, 'w') as nc:
+        nc.createDimension('valid_time', None)
+        time = nc.createVariable('valid_time', 'f8', ('valid_time',))
+        time.setncatts({'standard_name': 'time', 'units': 'days since 1940-01-01 00:00:00',
+                        'calendar': 'proleptic_gregorian'})
+        time[:] = [0, 1, 2]
+        dims = ['valid_time']
+        if levels:
+            nc.createDimension('pressure_level', len(levels))
+            plev = nc.createVariable('pressure_level', 'f8', ('pressure_level',))
+            plev.setncatts({'standard_name': 'air_pressure', 'units': 'hPa', 'positive': 'down'})
+            plev[:] = levels
+            dims.append('pressure_level')
+        for dim, axis, units in (('latitude', lat, 'degrees_north'), ('longitude', lon, 'degrees_east')):
+            nc.createDimension(dim, len(axis))
+            var = nc.createVariable(dim, 'f8', (dim,))
+            var.setncatts({'standard_name': dim, 'units': units})
+            var[:] = axis
+            dims.append(dim)
+        var = nc.createVariable(name, 'f4', dims, fill_value=np.float32('nan'))
+        var.setncatts({'units': 'K', 'GRIB_paramId': param_id, 'GRIB_shortName': short_name})
+        var[:] = values
+    return values
+
+
+@pytest.mark.skipif(not shutil.which('cdo'), reason='needs cdo')
+@pytest.mark.parametrize('name, param_id, short_name, levels', [('t2m', 167, '2t', None),
+                                                                 ('t', 130, 't', [1000, 500])])
+def test_year_convert_netcdf_via_grib(tmp_path, name, param_id, short_name, levels):
+    """Daily statistics get the names of the converted GRIB files, with the same values"""
+    netCDF4 = pytest.importorskip('netCDF4')
+    np = pytest.importorskip('numpy')
+    infile = tmp_path / 'ERA5_x_day_full_sfc_1940.nc'
+    values = cfgrib_netcdf(infile, name, param_id, short_name, levels)
+    out = postproc.year_convert(infile, tmp_path / 'out.nc')
+    with netCDF4.Dataset(out) as nc:
+        assert list(nc.variables[short_name].dimensions) == ['time'] + (['plev'] if levels else []) + ['lat', 'lon']
+        np.testing.assert_array_equal(nc.variables[short_name][:], values)
+        assert nc.variables['time'][:].tolist() == [0, 1, 2]
+        if levels:
+            assert nc.variables['plev'][:].tolist() == [100000, 50000]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['ERA5_x_day_full_sfc_1940.nc', 'out.nc']
+
+
+@pytest.mark.skipif(not shutil.which('cdo'), reason='needs cdo')
+def test_year_convert_netcdf_without_grib1_code(tmp_path):
+    """A parameter of GRIB2 only (2 metre relative humidity) is an error, not a renamed variable"""
+    infile = tmp_path / 'in.nc'
+    cfgrib_netcdf(infile, 'r2', 260242, '2r')
+    with pytest.raises(ValueError, match='no GRIB1 code for 2r'):
+        postproc.year_convert(infile, tmp_path / 'out.nc')
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['in.nc']
