@@ -109,3 +109,13 @@ def test_handle_signals(monkeypatch):
     monkeypatch.setattr(cli.signal, 'getsignal', lambda sig: signal.SIG_IGN)
     cli.handle_signals()
     assert set(handlers) == {signal.SIGTERM}
+
+
+def test_get_cdo_keeps_signal_handlers():
+    """python-cdo replaces the handlers and makes them restart system calls, delaying Ctrl-C"""
+    pytest.importorskip('cdo')
+    from cds_retriever import cdo_utils
+    cdo_utils.get_cdo.cache_clear()
+    before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
+    cdo_utils.get_cdo().nyear  # the first call of an operator creates a new tempfile store
+    assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before
