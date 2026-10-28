@@ -74,6 +74,28 @@ def get_client(**kwargs):
     return cdsapi.Client(**kwargs)
 
 
+def submit_and_download(client, dataset, request, target):
+    """
+    client.retrieve, deleting the CDS request if the download is interrupted
+    (Ctrl-C, workers stopped), so that it does not stay in the CDS queue of the user
+    """
+    datastores = getattr(client, 'client', None)  # ecmwf.datastores client wrapped by cdsapi >= 0.7
+    if not hasattr(datastores, 'submit'):
+        return client.retrieve(dataset, request, target)
+    remote = datastores.submit(dataset, request)
+    try:
+        return remote.download(target)
+    except Exception:
+        raise
+    except BaseException:
+        log.warning('Interrupted: deleting CDS request %s', remote.request_id)
+        try:
+            remote.delete()
+        except Exception as exc:
+            log.warning('Cannot delete CDS request %s: %s', remote.request_id, exc)
+        raise
+
+
 def download(dataset, request, target, retries=3, wait=60, client=None):
     """
     Retrieve a request into target, retrying on failure.
@@ -89,12 +111,14 @@ def download(dataset, request, target, retries=3, wait=60, client=None):
     for attempt in range(1, retries + 1):
         try:
             log.info('Requesting %s (attempt %d/%d): %s', target.name, attempt, retries, request)
-            client.retrieve(dataset, request, str(part))
+            submit_and_download(client, dataset, request, str(part))
             unzip_single(part)
             part.replace(target)
             return target
-        except Exception as exc:
+        except BaseException as exc:
             part.unlink(missing_ok=True)
+            if not isinstance(exc, Exception):  # interrupted: no retries
+                raise
             if attempt == retries:
                 raise RuntimeError(f'Failed to download {target.name} after {retries} attempts: {exc}') from exc
             log.warning('Download of %s failed: %s. Retrying in %d s', target.name, exc, wait * attempt)

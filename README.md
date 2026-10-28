@@ -24,6 +24,9 @@ It is built on top of:
 - Failed requests are retried; files are written atomically and checked for completeness, so
   interrupted runs can be safely restarted and already downloaded files are skipped.
 - Errors in the parallel workers are reported and the program exits with a non-zero status.
+- Ctrl-C (or SIGTERM, e.g. from a batch scheduler) stops everything: pending jobs are cancelled, the
+  workers are stopped together with their `cdo` subprocesses, and the CDS requests in progress are
+  deleted from your CDS queue. Run again to resume.
 - Post-processing converts the downloaded GRIB files to compressed NetCDF4 format.
 - For monthly data, the script merges the yearly files and optionally aligns the time axis.
 - For sub-daily data, daily mean files are generated.

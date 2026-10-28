@@ -10,6 +10,9 @@ Example:
 
 import datetime
 import logging
+import os
+import signal
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,18 +61,77 @@ class RetrieveResult:
     files: Dict[str, List[Path]] = field(default_factory=dict)  # variable -> netCDF files produced
 
 
-def _worker_logging(level):
-    """Logging in the worker processes: they do not inherit the configuration with spawn"""
+class Interrupted(BaseException):
+    """Raised in a worker stopped by the main process, so that the cleanups run
+    (e.g. the pending CDS requests are deleted)"""
+
+
+_in_job = False  # whether a worker is running a job
+
+
+def _on_sigterm(signum, frame):
+    """SIGTERM in a worker: interrupt the job, or exit at once when idle"""
+    if not _in_job:
+        os._exit(128 + signum)
+    raise Interrupted()
+
+
+def _init_worker(level):
+    """
+    Worker set-up. Each worker gets its own process group, so that the main process can stop it
+    together with its subprocesses (cdo, grib_copy), and a terminal Ctrl-C reaches the main process
+    only.
+    Logging is not inherited with spawn.
+    """
+    os.setpgrp()
+    signal.signal(signal.SIGTERM, _on_sigterm)
     root = logging.getLogger()
     if not root.handlers:
         logging.basicConfig(format=LOG_FORMAT)
     root.setLevel(level)
 
 
+def _run_job(func, kwargs):
+    """Run a job in a worker, which exits once its cleanups are done if it is stopped"""
+    global _in_job
+    _in_job = True
+    try:
+        return func(**kwargs)
+    except Interrupted:
+        os._exit(128 + signal.SIGTERM)
+    finally:
+        _in_job = False
+
+
+def stop_workers(executor, grace=30):
+    """
+    Cancel the pending jobs and stop the workers with their subprocesses: SIGTERM first, so that
+    the running jobs clean up, then SIGKILL after `grace` seconds.
+    """
+    processes = list((executor._processes or {}).values())  # the workers are not public
+    executor.shutdown(wait=False, cancel_futures=True)
+
+    def kill(sig):
+        for process in processes:
+            try:
+                os.killpg(process.pid, sig)
+            except (ProcessLookupError, PermissionError):
+                pass
+
+    kill(signal.SIGTERM)
+    try:
+        deadline = time.monotonic() + grace
+        for process in processes:
+            process.join(max(0.0, deadline - time.monotonic()))
+    finally:  # also on a second Ctrl-C
+        kill(signal.SIGKILL)
+
+
 def run_parallel(func, jobs, nprocs):
     """
     Run func(**kwargs) for each (label, kwargs) job in a process pool.
     Exceptions raised in the workers are collected, not lost.
+    On interruption (Ctrl-C, SIGTERM) the pending jobs are cancelled and the workers stopped.
 
     Returns:
         dict: label -> exception for the failed jobs
@@ -78,8 +140,9 @@ def run_parallel(func, jobs, nprocs):
     if not jobs:
         return failures
     level = logging.getLogger().getEffectiveLevel()
-    with ProcessPoolExecutor(max_workers=nprocs, initializer=_worker_logging, initargs=(level,)) as executor:
-        futures = {executor.submit(func, **kwargs): label for label, kwargs in jobs}
+    executor = ProcessPoolExecutor(max_workers=nprocs, initializer=_init_worker, initargs=(level,))
+    try:
+        futures = {executor.submit(_run_job, func, kwargs): label for label, kwargs in jobs}
         for future in as_completed(futures):
             label = futures[future]
             try:
@@ -88,6 +151,11 @@ def run_parallel(func, jobs, nprocs):
             except Exception as exc:
                 log.error('%s: FAILED: %s', label, exc)
                 failures[label] = exc
+    except BaseException:
+        log.warning('Interrupted: stopping the running jobs')
+        stop_workers(executor)
+        raise
+    executor.shutdown()
     return failures
 
 
