@@ -22,9 +22,10 @@ from .api import estimate_cost, last_available, validate_request
 from .config import load_config, validate_config
 from .download import (choose_request_mode, concat_months, group_retrieve, is_year_complete,
                        month_retrieve, year_retrieve)
-from .postproc import align_time, daily_mean, merge_monthly, which_new_years_download, year_convert
-from .request import (HOURS_STEP, PARAM_IDS, build_request, create_filename, download_suffix, is_daily,
-                      month_chunks)
+from .postproc import (align_time, daily_mean, heat_convert, merge_monthly,
+                       which_new_years_download, year_convert)
+from .request import (HOURS_STEP, PARAM_IDS, build_request, create_filename, download_suffix,
+                      heat_variable, is_daily, month_chunks)
 
 log = logging.getLogger('cds_retriever')
 LOG_FORMAT = '%(asctime)s %(levelname)s %(processName)s: %(message)s'
@@ -329,13 +330,17 @@ def postprocess_variable(config, var, years):
     destdir = Path(config['storedir'], var, freq)
     destdir.mkdir(parents=True, exist_ok=True)
 
+    convert, options = year_convert, {}
+    if dataset == 'ERA5-HEAT':
+        convert, options = heat_convert, dict(select=heat_variable(var, freq)[1])
     jobs, yearly = [], []
     for year in years:
         filename = create_filename(dataset, var, freq, grid, levelout, area, year)
         yearly.append(Path(destdir, filename + '.nc'))
         jobs.append((f'{var} {year} convert',
-                     dict(infile=Path(savedir, filename + download_suffix(freq)), outfile=yearly[-1])))
-    failures = run_parallel(year_convert, jobs, config['nprocs'])
+                     dict(infile=Path(savedir, filename + download_suffix(freq, dataset)),
+                          outfile=yearly[-1], **options)))
+    failures = run_parallel(convert, jobs, config['nprocs'])
     if failures:
         return [], failures
 

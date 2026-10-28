@@ -1,7 +1,7 @@
 import pytest
 
 from cds_retriever.request import (build_request, create_filename, dataset_id, define_level,
-                                   define_time, download_suffix, expected_steps, level_label,
+                                   define_time, download_suffix, expected_steps, heat_variable, level_label,
                                    month_chunks)
 
 MONTHS = [str(i).zfill(2) for i in range(1, 13)]
@@ -162,3 +162,35 @@ def test_create_filename():
 def test_download_suffix():
     assert download_suffix('mon') == '.grib' and download_suffix('1hr') == '.grib'
     assert download_suffix('day') == '.nc' and download_suffix('daysum') == '.nc'
+    assert download_suffix('1hr', 'ERA5-HEAT') == '.nc'
+
+
+@pytest.mark.parametrize('var, freq, requested', [
+    ('universal_thermal_climate_index', '1hr', 'universal_thermal_climate_index'),
+    ('mean_radiant_temperature', '1hr', 'mean_radiant_temperature'),
+    ('universal_thermal_climate_index', 'daymax', 'universal_thermal_climate_index_daily_statistics'),
+])
+def test_build_request_heat(var, freq, requested):
+    name, req = build_request('ERA5-HEAT', var, freq, 2000, MONTHS, area=[46, 7, 44, 10])
+    assert name == 'derived-utci-historical'
+    assert req == {'variable': [requested], 'version': '1_1', 'product_type': 'consolidated_dataset',
+                   'year': ['2000'], 'month': MONTHS, 'day': [str(i).zfill(2) for i in range(1, 32)],
+                   'area': [46.0, 7.0, 44.0, 10.0]}
+
+
+@pytest.mark.parametrize('var, freq, levelout, grid, match', [
+    ('universal_thermal_climate_index', 'mon', 'sfc', 'full', 'freq 1hr, daymin, daymax'),
+    ('universal_thermal_climate_index', '1hr', '500hPa', 'full', 'only surface data'),
+    ('universal_thermal_climate_index', '1hr', 'sfc', '1x1', 'grid selection'),
+    ('mean_radiant_temperature', 'daymin', 'sfc', 'full', 'only for universal_thermal_climate_index'),
+    ('2m_temperature', '1hr', 'sfc', 'full', 'Unknown ERA5-HEAT variable'),
+])
+def test_build_request_heat_invalid(var, freq, levelout, grid, match):
+    with pytest.raises(ValueError, match=match):
+        build_request('ERA5-HEAT', var, freq, 2000, MONTHS, grid=grid, levelout=levelout)
+
+
+def test_heat_variable():
+    assert heat_variable('universal_thermal_climate_index', '1hr') == ('universal_thermal_climate_index', None)
+    assert heat_variable('universal_thermal_climate_index', 'daymin') == \
+        ('universal_thermal_climate_index_daily_statistics', 'utci_daily_min')

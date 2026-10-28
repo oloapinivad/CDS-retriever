@@ -2,7 +2,8 @@
 **Tool for parallel retrieval of ECMWF ERA5 data from the Climate Data Store (CDS)**
 
 ## Overview
-CDS-retriever automates the parallel download and postprocessing of ERA5 and ERA5-Land data from the Climate Data Store (CDS).
+CDS-retriever automates the parallel download and postprocessing of ERA5 and ERA5-Land data, and of the
+ERA5-HEAT thermal comfort indices, from the Climate Data Store (CDS).
 
 It is built on top of:
 
@@ -103,7 +104,7 @@ the **command-line argument takes precedence.**
 | **Parameter**        | **Type**            | **Description**                                                                    |
 |----------------------|---------------------|------------------------------------------------------------------------------------|
 | `tmpdir`, `storedir` | `str`               | Paths for temporary download and final storage directories (required).             |
-| `dataset`            | `str`               | Dataset to retrieve. Options: **`'ERA5'`** (default), **`'ERA5-Land'`**.           |
+| `dataset`            | `str`               | Dataset to retrieve. Options: **`'ERA5'`** (default), **`'ERA5-Land'`**, **`'ERA5-HEAT'`** (thermal comfort indices, see below). |
 | `product_type`       | `str`               | **`'reanalysis'`** (default), or ERA5 ensemble **`'ensemble_members'`**, **`'ensemble_mean'`**, **`'ensemble_spread'`** (3-hourly). |
 | `varlist`            | `list[str]`         | List of variables to download (e.g., `['total_precipitation', '2m_temperature']`). All variables must share the same properties. |
 | `year.begin`         | `int`               | First year of the time range to retrieve.                                          |
@@ -147,6 +148,26 @@ They are a few days behind the hourly data.
 - `grid` must be `full`. Ensemble products are `ensemble_members` and `ensemble_mean`.
 - The yearly files are kept in `<storedir>/<variable>/<freq>/`, e.g.
   `ERA5_2m_temperature_day_full_sfc_2024.nc`. `merge` applies to monthly data only.
+
+### ERA5-HEAT thermal comfort indices
+
+`dataset: ERA5-HEAT` retrieves the Universal Thermal Climate Index (UTCI) and the mean radiant
+temperature computed from ERA5 (`derived-utci-historical`, version 1.1, consolidated dataset):
+
+| `freq`              | `varlist`                                                         |
+|---------------------|-------------------------------------------------------------------|
+| `1hr`               | `universal_thermal_climate_index`, `mean_radiant_temperature`      |
+| `daymin`, `daymax`  | `universal_thermal_climate_index` (daily minimum / maximum computed by the CDS) |
+
+- The CDS delivers a zip with one netCDF file per day: the files of each year are merged in a
+  single `.nc` file in `<tmpdir>/<variable>/`, then compressed in `<storedir>/<variable>/<freq>/`,
+  e.g. `ERA5-HEAT_universal_thermal_climate_index_1hr_full_sfc_2000.nc`. The variables keep the
+  names of the CDS files (`utci`, in K, on the 0.25 degree grid); the daily statistics
+  (`utci_daily_min`, `utci_daily_max`) are renamed `utci`. Daily means of hourly data are computed
+  as for ERA5.
+- `grid` must be `full`, `levelout` `sfc`; `area` can be used. One year fits in a single request.
+- The intermediate dataset, with the most recent months, is not retrieved: as for ERA5, only
+  complete years are downloaded.
 
 ## Use as a library
 

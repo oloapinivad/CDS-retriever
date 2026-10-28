@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .api import estimate_cost
 from .cdo_utils import get_cdo, ntime
+from .postproc import NC_OPTIONS
 from .request import (PARAM_IDS, build_request, create_filename, download_suffix, expected_steps,
                       month_chunks)
 
@@ -112,7 +113,7 @@ def download(dataset, request, target, retries=3, wait=60, client=None):
         try:
             log.info('Requesting %s (attempt %d/%d): %s', target.name, attempt, retries, request)
             submit_and_download(client, dataset, request, str(part))
-            unzip_single(part)
+            unzip(part)
             part.replace(target)
             return target
         except BaseException as exc:
@@ -126,25 +127,44 @@ def download(dataset, request, target, retries=3, wait=60, client=None):
     return target
 
 
-def unzip_single(path):
-    """Replace a zip archive holding a single file (as the CDS may deliver netCDF) with that file"""
+def unzip(path):
+    """
+    Replace a zip archive delivered by the CDS with the netCDF file it holds. Several files
+    (ERA5-HEAT: one file per day) are merged along time.
+    """
     path = Path(path)
     if not zipfile.is_zipfile(path):
         return
     with zipfile.ZipFile(path) as archive:
-        members = [m for m in archive.namelist() if not m.endswith('/')]
-        if len(members) != 1:
-            raise RuntimeError(f'{path.name}: expected a single file in the zip archive, found {members}')
-        log.info('Extracting %s from the zip archive', members[0])
+        members = sorted(m for m in archive.namelist() if not m.endswith('/'))
+        if not members:
+            raise RuntimeError(f'{path.name}: empty zip archive')
         tmp = path.with_name(path.name + '.unzip')
-        with archive.open(members[0]) as src, open(tmp, 'wb') as dst:
-            shutil.copyfileobj(src, dst)
+        tmpdir = path.with_name(path.name + '.files')
+        try:
+            if len(members) == 1:
+                log.info('Extracting %s from the zip archive', members[0])
+                with archive.open(members[0]) as src, open(tmp, 'wb') as dst:
+                    shutil.copyfileobj(src, dst)
+            else:
+                log.info('Merging the %d files of the zip archive (%s ... %s)',
+                         len(members), members[0], members[-1])
+                files = [archive.extract(m, tmpdir) for m in members]
+                # a year of files makes a command line too long for the netCDF history of CDO
+                get_cdo().mergetime(input=' '.join(files), output=str(tmp),
+                                    options=NC_OPTIONS + ' --no_history')
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
     tmp.replace(path)
 
 
 def year_file(outdir, dataset, var, freq, grid, levelout, area, year):
-    """Path of the yearly downloaded file (GRIB, or netCDF for daily statistics)"""
-    return Path(outdir, create_filename(dataset, var, freq, grid, levelout, area, year) + download_suffix(freq))
+    """Path of the yearly downloaded file (GRIB, or netCDF for daily statistics and ERA5-HEAT)"""
+    return Path(outdir, create_filename(dataset, var, freq, grid, levelout, area, year) +
+                download_suffix(freq, dataset))
 
 
 def month_file(yearfile, month):

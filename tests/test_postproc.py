@@ -154,3 +154,26 @@ def test_year_convert_netcdf_without_grib1_code(tmp_path):
     with pytest.raises(ValueError, match='no GRIB1 code for 2r'):
         postproc.year_convert(infile, tmp_path / 'out.nc')
     assert sorted(p.name for p in tmp_path.iterdir()) == ['in.nc']
+
+
+@pytest.mark.skipif(not shutil.which('cdo'), reason='needs cdo')
+def test_heat_convert_daily_statistic(tmp_path):
+    """ERA5-HEAT daily statistics: the statistic is selected and named utci"""
+    netCDF4 = pytest.importorskip('netCDF4')
+    np = pytest.importorskip('numpy')
+    infile = tmp_path / 'in.nc'
+    with netCDF4.Dataset(infile, 'w') as nc:
+        nc.createDimension('time', None)
+        time = nc.createVariable('time', 'f8', ('time',))
+        time.setncatts({'standard_name': 'time', 'units': 'hours since 2000-7-1 00:00:00', 'axis': 'T'})
+        time[:] = [11.5, 35.5]
+        for dim, axis in (('lat', [46.0, 45.75]), ('lon', [7.0, 7.25])):
+            nc.createDimension(dim, 2)
+            nc.createVariable(dim, 'f8', (dim,))[:] = axis
+        for name, value in (('utci_daily_min', 280), ('utci_daily_max', 300)):
+            nc.createVariable(name, 'f4', ('time', 'lat', 'lon'))[:] = np.full((2, 2, 2), value, 'f4')
+    out = postproc.heat_convert(infile, tmp_path / 'out.nc', select='utci_daily_max')
+    with netCDF4.Dataset(out) as nc:
+        assert [v for v in nc.variables if v.startswith('utci')] == ['utci']
+        assert (nc.variables['utci'][:] == 300).all()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['in.nc', 'out.nc']

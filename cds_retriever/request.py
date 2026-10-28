@@ -1,4 +1,4 @@
-"""Build CDS API requests and file names for ERA5 / ERA5-Land.
+"""Build CDS API requests and file names for ERA5 / ERA5-Land / ERA5-HEAT.
 
 Everything in this module is pure python: no CDO, no network.
 """
@@ -6,7 +6,7 @@ Everything in this module is pure python: no CDO, no network.
 import calendar
 import re
 
-DATASETS = ('ERA5', 'ERA5-Land')
+DATASETS = ('ERA5', 'ERA5-Land', 'ERA5-HEAT')
 FREQS = ('instant', '1hr', '3hrs', '6hrs', 'day', 'daymin', 'daymax', 'daysum', 'mon')
 GRIDS = ('full', '0.1x0.1', '0.25x0.25', '0.5x0.5', '1x1', '2.5x2.5')
 PRODUCT_TYPES = ('reanalysis', 'ensemble_members', 'ensemble_mean', 'ensemble_spread')
@@ -20,6 +20,15 @@ HOURS_STEP = {'1hr': 1, '3hrs': 3, '6hrs': 6}
 DAILY_STATISTICS = {'day': 'daily_mean', 'daymin': 'daily_minimum', 'daymax': 'daily_maximum',
                     'daysum': 'daily_sum'}
 DAILY_PRODUCT_TYPES = ('reanalysis', 'ensemble_members', 'ensemble_mean')
+
+# ERA5-HEAT thermal comfort indices (derived-utci-historical): hourly fields on the 0.25 degree
+# grid, or the daily minimum and maximum of the UTCI, delivered as a zip of daily netCDF files.
+# The consolidated dataset covers the complete years, the intermediate one only the last months.
+HEAT_DATASET = 'derived-utci-historical'
+HEAT_VERSION = '1_1'
+HEAT_VARIABLES = ('universal_thermal_climate_index', 'mean_radiant_temperature')
+# netCDF variable of each daily statistic
+HEAT_DAILY = {'daymin': 'utci_daily_min', 'daymax': 'utci_daily_max'}
 
 PLEVS = {
     'ERA5': ['1', '2', '3', '5', '7', '10', '20', '30', '50', '70', '100', '125',
@@ -173,9 +182,26 @@ def is_daily(freq):
     return freq in DAILY_STATISTICS
 
 
-def download_suffix(freq):
-    """Extension of the downloaded files: daily statistics are only available as netCDF"""
-    return '.nc' if is_daily(freq) else '.grib'
+def download_suffix(freq, dataset='ERA5'):
+    """Extension of the downloaded files: daily statistics and ERA5-HEAT are netCDF only"""
+    return '.nc' if is_daily(freq) or dataset == 'ERA5-HEAT' else '.grib'
+
+
+def heat_variable(var, freq):
+    """
+    ERA5-HEAT variable to request, and netCDF variable to select in the downloaded files
+    (None: the single variable of the files)
+    """
+    if var not in HEAT_VARIABLES:
+        raise ValueError(f'Unknown ERA5-HEAT variable {var}, options are {HEAT_VARIABLES}')
+    if freq == '1hr':
+        return var, None
+    if freq in HEAT_DAILY:
+        if var != 'universal_thermal_climate_index':
+            raise ValueError(f'ERA5-HEAT daily statistics ({freq}) are available only for '
+                             'universal_thermal_climate_index')
+        return 'universal_thermal_climate_index_daily_statistics', HEAT_DAILY[freq]
+    raise ValueError(f'ERA5-HEAT is available with freq 1hr, {", ".join(HEAT_DAILY)}, not {freq}')
 
 
 def dataset_id(dataset, level_kind, freq):
@@ -186,6 +212,13 @@ def dataset_id(dataset, level_kind, freq):
         if level_kind != 'single-levels':
             raise ValueError('ERA5-Land provides only surface data: use levelout: sfc')
         name = 'reanalysis-era5-land'
+    elif dataset == 'ERA5-HEAT':
+        if level_kind != 'single-levels':
+            raise ValueError('ERA5-HEAT provides only surface data: use levelout: sfc')
+        if freq != '1hr' and freq not in HEAT_DAILY:
+            raise ValueError(f'ERA5-HEAT is available with freq 1hr, '
+                             f'{", ".join(HEAT_DAILY)}, not {freq}')
+        return HEAT_DATASET
     else:
         raise ValueError(f'Unknown dataset {dataset} requested, options are {DATASETS}')
 
@@ -270,11 +303,12 @@ def build_request(dataset, var, freq, years, months, grid='full', levelout='sfc'
     Returns:
         tuple: (dataset identifier, request dictionary)
     """
+    as_list = lambda x: [str(v) for v in x] if isinstance(x, (list, tuple)) else [str(x)]
     levels, level_kind = define_level(levelout)
     name = dataset_id(dataset, level_kind, freq)
+    if dataset == 'ERA5-HEAT':
+        return name, heat_request(var, freq, as_list(years), as_list(months), grid, area)
     product_type, day, time = define_time(freq, product_type)
-
-    as_list = lambda x: [str(v) for v in x] if isinstance(x, (list, tuple)) else [str(x)]
 
     request = {}
     # ERA5-Land hourly and daily statistics have no product type selection
@@ -306,6 +340,19 @@ def build_request(dataset, var, freq, years, months, grid='full', levelout='sfc'
         request['download_format'] = 'unarchived'
 
     return name, request
+
+
+def heat_request(var, freq, years, months, grid='full', area='global'):
+    """Request to ERA5-HEAT (derived-utci-historical): consolidated dataset, all the days"""
+    if grid != 'full':
+        raise ValueError('grid selection is not available for ERA5-HEAT: use grid: full')
+    variables = [heat_variable(v, freq)[0] for v in ([var] if isinstance(var, str) else var)]
+    request = {'variable': variables, 'version': HEAT_VERSION,
+               'product_type': 'consolidated_dataset', 'year': years, 'month': months,
+               'day': [str(i).zfill(2) for i in range(1, 32)]}
+    if area != 'global':
+        request['area'] = [float(x) for x in area]
+    return request
 
 
 def create_filename(dataset, var, freq, grid, levelout, area, year1, year2=None):

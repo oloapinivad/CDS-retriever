@@ -110,9 +110,33 @@ def test_retrieve_daily_statistics(base, backend, tmp_path):
     assert not (tmp_path / 'store' / '2m_temperature' / 'day').exists()  # no daily mean of daily data
 
 
+def test_retrieve_heat(base, backend, tmp_path, monkeypatch):
+    """ERA5-HEAT: netCDF requests per variable and year, the daily statistic is selected at conversion"""
+    converted = []
+
+    def fake_convert(infile, outfile, select=None):
+        converted.append(select)
+        return shutil.copy(infile, outfile) and Path(outfile)
+
+    monkeypatch.setattr(runner, 'heat_convert', fake_convert)
+    result = retrieve(dict(base, dataset='ERA5-HEAT', freq='daymin', varlist=['universal_thermal_climate_index']))
+    assert [name for name, _ in backend['requests']] == ['derived-utci-historical'] * 2
+    assert backend['requests'][0][1]['variable'] == ['universal_thermal_climate_index_daily_statistics']
+    assert (tmp_path / 'tmp' / 'universal_thermal_climate_index' /
+            'ERA5-HEAT_universal_thermal_climate_index_daymin_full_sfc_2000.nc').exists()
+    assert [f.name for f in result.files['universal_thermal_climate_index']] == \
+        [f'ERA5-HEAT_universal_thermal_climate_index_daymin_full_sfc_{y}.nc' for y in (2000, 2001)]
+    assert converted == ['utci_daily_min'] * 2
+
+
 @pytest.mark.parametrize('changes, match', [
     ({'freq': 'day', 'grid': '1x1'}, 'grid selection'),
     ({'freq': 'daysum', 'levelout': 'plev8'}, 'only on single levels'),
+    ({'dataset': 'ERA5-HEAT', 'freq': '1hr', 'grid': '1x1',
+      'varlist': ['universal_thermal_climate_index']}, 'grid selection'),
+    ({'dataset': 'ERA5-HEAT', 'freq': 'daymax', 'varlist': ['mean_radiant_temperature']},
+     'only for universal_thermal_climate_index'),
+    ({'dataset': 'ERA5-HEAT', 'freq': 'mon', 'varlist': ['universal_thermal_climate_index']}, 'freq 1hr'),
 ])
 def test_daily_config_errors(base, changes, match):
     with pytest.raises(ValueError, match=match):

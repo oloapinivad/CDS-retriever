@@ -34,6 +34,22 @@ def year_convert(infile, outfile, debug=False):
     return outfile
 
 
+def heat_convert(infile, outfile, select=None, name='utci'):
+    """
+    Compress an ERA5-HEAT yearly file, already netCDF with CF names (utci, mrt, time, lat, lon).
+    For daily statistics, select the variable of the statistic (e.g. utci_daily_min),
+    renamed to name.
+    """
+    outfile = Path(outfile)
+    tmpfile = outfile.with_name(outfile.name + '.part')
+    source = str(infile)
+    if select is not None:
+        source = f'-chname,{select},{name} -selname,{select} {infile}'
+    get_cdo().copy(input=source, output=str(tmpfile), options=NC_OPTIONS)
+    tmpfile.replace(outfile)
+    return outfile
+
+
 def grib1_param(param_id):
     """GRIB1 code.table of an ecCodes paramId, e.g. 167 -> 167.128, 228246 -> 246.228"""
     table, code = divmod(int(param_id), 1000)

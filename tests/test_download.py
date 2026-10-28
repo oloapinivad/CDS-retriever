@@ -1,9 +1,11 @@
+import shutil
 from pathlib import Path
 
 import pytest
 
 from cds_retriever import runner
 from cds_retriever import download as dl
+from cds_retriever.cdo_utils import ntime
 
 
 class FakeCdo:
@@ -163,15 +165,58 @@ def test_unzip_single(tmp_path):
     target = tmp_path / 'data.nc.part'
     with zipfile.ZipFile(target, 'w') as archive:
         archive.writestr('data_stream-oper.nc', b'netcdf')
-    dl.unzip_single(target)
+    dl.unzip(target)
     assert target.read_bytes() == b'netcdf'
-    dl.unzip_single(target)  # not a zip: unchanged
+    dl.unzip(target)  # not a zip: unchanged
     assert target.read_bytes() == b'netcdf'
+
+
+def heat_day(path, day, hours=24):
+    """Daily netCDF file of hourly UTCI, as delivered by the CDS for ERA5-HEAT"""
+    netCDF4 = pytest.importorskip('netCDF4')
+    np = pytest.importorskip('numpy')
+    with netCDF4.Dataset(path, 'w') as nc:
+        nc.createDimension('time', None)
+        time = nc.createVariable('time', 'f8', ('time',))
+        time.setncatts({'standard_name': 'time', 'units': 'hours since 2000-1-1 00:00:00',
+                        'calendar': 'proleptic_gregorian', 'axis': 'T'})
+        time[:] = [24 * (day - 1) + h for h in range(hours)]
+        for dim, axis, units in (('lat', [46.0, 45.75], 'degrees_north'), ('lon', [7.0, 7.25, 7.5], 'degrees_east')):
+            nc.createDimension(dim, len(axis))
+            var = nc.createVariable(dim, 'f8', (dim,))
+            var.setncatts({'standard_name': 'latitude' if dim == 'lat' else 'longitude', 'units': units})
+            var[:] = axis
+        utci = nc.createVariable('utci', 'f4', ('time', 'lat', 'lon'), fill_value=np.float32(-9e33))
+        utci[:] = 290 + day + np.zeros((hours, 2, 3), 'f4')
+
+
+@pytest.mark.skipif(not shutil.which('cdo'), reason='needs cdo')
+def test_unzip_merges_daily_files(tmp_path):
+    """ERA5-HEAT: a zip with one netCDF file per day becomes a single file, sorted in time"""
+    import zipfile
+    target = tmp_path / 'heat.nc.part'
     with zipfile.ZipFile(target, 'w') as archive:
-        archive.writestr('a.nc', b'a')
-        archive.writestr('b.nc', b'b')
-    with pytest.raises(RuntimeError, match='single file'):
-        dl.unzip_single(target)
+        for day in (2, 1):
+            heat_day(tmp_path / f'day{day}.nc', day)
+            archive.write(tmp_path / f'day{day}.nc', f'ECMWF_utci_2000070{day}_v1.1_con.nc')
+    dl.unzip(target)
+    assert ntime(target) == 48
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['day1.nc', 'day2.nc', 'heat.nc.part']
+
+
+@pytest.mark.skipif(not shutil.which('cdo'), reason='needs cdo')
+def test_unzip_merges_a_year(tmp_path):
+    """A year of daily files in a deep directory: the command line is too long for the netCDF history"""
+    import zipfile
+    deep = tmp_path / ('d' * 120) / ('e' * 120)
+    deep.mkdir(parents=True)
+    target = deep / 'heat.nc.part'
+    with zipfile.ZipFile(target, 'w') as archive:
+        for day in range(1, 301):
+            heat_day(tmp_path / 'day.nc', day, hours=1)
+            archive.write(tmp_path / 'day.nc', f'ECMWF_utci_{day:04d}_v1.1_con.area-subset.46.10.44.7.nc')
+    dl.unzip(target)
+    assert ntime(target) == 300
 
 
 def test_month_file_keeps_suffix():

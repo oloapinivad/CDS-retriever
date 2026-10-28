@@ -7,7 +7,8 @@ from collections.abc import Mapping
 
 import yaml
 
-from .request import DATASETS, FREQS, GRIDS, PRODUCT_TYPES, REQUEST_MODES, dataset_id, define_level, is_daily
+from .request import (DATASETS, FREQS, GRIDS, PRODUCT_TYPES, REQUEST_MODES, dataset_id,
+                      define_level, heat_variable, is_daily)
 
 log = logging.getLogger(__name__)
 
@@ -140,6 +141,16 @@ def validate_config(config):
 
     if is_daily(config['freq']) and config['grid'] != 'full':
         errors.append('grid selection is not available for daily statistics: use grid: full')
+    if config['dataset'] == 'ERA5-HEAT':
+        if config['grid'] != 'full' and not is_daily(config['freq']):
+            errors.append('grid selection is not available for ERA5-HEAT: use grid: full')
+        if config['freq'] in FREQS:
+            for var in config.get('varlist') or []:
+                try:
+                    heat_variable(var, config['freq'])
+                except ValueError as exc:
+                    if str(exc) not in errors:
+                        errors.append(str(exc))
 
     area = config['area']
     if area != 'global':
