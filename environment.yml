@@ -9,6 +9,8 @@ dependencies:
   - python-cdo
   - pyyaml
   - eccodes>=2.41.0
+  - xarray    # not needed by the tool: to open the output (and silences python-cdo warnings)
+  - netcdf4
   - pytest
   - pip
   - pip:
