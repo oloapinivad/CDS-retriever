@@ -177,3 +177,15 @@ def test_unzip_single(tmp_path):
 def test_month_file_keeps_suffix():
     assert dl.month_file(Path('x/ERA5_t_day_full_sfc_2000.nc'), '03').name == 'ERA5_t_day_full_sfc_2000_month03.nc'
     assert dl.month_file(Path('x/ERA5_t_mon_full_sfc_2000.grib'), '03').name == 'ERA5_t_mon_full_sfc_2000_month03.grib'
+
+
+def test_ntime_skips_cdo_warnings(monkeypatch):
+    """GRIB2 monthly means of ERA5-Land: CDO prints a warning before the number of steps"""
+    from cds_retriever import cdo_utils
+
+    class WarningCdo:
+        def ntime(self, input, options):
+            return ['cdi  gribapiGetTsteptype: Time stepType avgd unsupported, set to instant!', '12']
+
+    monkeypatch.setattr(cdo_utils, 'get_cdo', lambda: WarningCdo())
+    assert cdo_utils.ntime('f.grib') == 12

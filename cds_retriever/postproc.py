@@ -6,7 +6,7 @@ import logging
 import re
 from pathlib import Path
 
-from .cdo_utils import get_cdo
+from .cdo_utils import get_cdo, result
 from .request import create_filename
 
 log = logging.getLogger(__name__)
@@ -47,12 +47,12 @@ def netcdf_via_grib(infile, outfile):
     GRIB_BITS bits, enough for the float32 of the CDS files.
     """
     cdo = get_cdo()
-    names = cdo.showname(input=str(infile), options='-s')[0].split()
+    names = result(cdo.showname(input=str(infile), options='-s')).split()
     if len(names) != 1:
         raise ValueError(f'{infile}: one variable expected, found {names}')
     attrs = {}
     for key in ('GRIB_paramId', 'GRIB_shortName'):
-        line = cdo.showattribute(f'{names[0]}@{key}', input=str(infile), options='-s')[-1]
+        line = result(cdo.showattribute(f'{names[0]}@{key}', input=str(infile), options='-s'))
         attrs[key] = line.partition('=')[2].strip().strip('"')
     grib = Path(outfile).with_name(Path(outfile).name + '.grib')
     try:
@@ -61,7 +61,7 @@ def netcdf_via_grib(infile, outfile):
         cdo.copy(input=str(grib), output=str(outfile), options=NC_OPTIONS + ' --eccodes')
     finally:
         grib.unlink(missing_ok=True)
-    converted = cdo.showname(input=str(outfile), options='-s')[0].split()
+    converted = result(cdo.showname(input=str(outfile), options='-s')).split()
     if converted != [attrs['GRIB_shortName']]:
         Path(outfile).unlink()
         raise ValueError(f'{infile}: paramId {attrs["GRIB_paramId"]} has no GRIB1 code for '
@@ -133,7 +133,7 @@ def align_time(filename):
     Useful for loading several variables together with xarray.
     """
     cdo = get_cdo()
-    first_time = cdo.showtime(input=f'-seltimestep,1 {filename}', options='-s')[0].strip()
+    first_time = result(cdo.showtime(input=f'-seltimestep,1 {filename}', options='-s')).strip()
     hours, minutes, _ = (int(x) for x in first_time.split(':'))
     if hours == 0 and minutes == 0:
         return False
