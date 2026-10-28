@@ -277,8 +277,8 @@ def build_request(dataset, var, freq, years, months, grid='full', levelout='sfc'
     as_list = lambda x: [str(v) for v in x] if isinstance(x, (list, tuple)) else [str(x)]
 
     request = {}
-    # ERA5-Land hourly has no product type selection
-    if name != 'reanalysis-era5-land':
+    # ERA5-Land hourly and daily statistics have no product type selection
+    if name not in ('reanalysis-era5-land', 'derived-era5-land-daily-statistics'):
         request['product_type'] = [product_type]
     request['variable'] = as_list(var)
     request['year'] = as_list(years)

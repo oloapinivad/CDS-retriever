@@ -145,6 +145,12 @@ def test_build_request_era5_land_hourly_has_no_product_type():
     assert 'product_type' not in req
 
 
+def test_build_request_era5_land_daily_has_no_product_type():
+    name, req = build_request('ERA5-Land', '2m_temperature', 'daymax', 2000, MONTHS)
+    assert name == 'derived-era5-land-daily-statistics'
+    assert 'product_type' not in req
+
+
 def test_create_filename():
     assert create_filename('ERA5', 'tp', 'mon', 'full', 'sfc', 'global', '1940') == 'ERA5_tp_mon_full_sfc_1940'
     assert create_filename('ERA5', 'tp', 'mon', 'full', 'sfc', 'global', '1940', '2022') == \
