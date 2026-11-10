@@ -92,6 +92,7 @@ PARAM_IDS = {
     'total_column_water': 136,
     'total_column_water_vapour': 137,
     'total_precipitation': 228,
+    'total_sky_direct_solar_radiation_at_surface': 228021,
     'volumetric_soil_water_layer_1': 39,
     'volumetric_soil_water_layer_2': 40,
     'volumetric_soil_water_layer_3': 41,
@@ -112,6 +113,27 @@ PARAM_IDS = {
     'vertical_velocity': 135,
     'vorticity': 138,
 }
+
+# Accumulated variables: the first step of the dataset (00:00 of 1 January of its first year)
+# does not exist, because the accumulation starts after it
+ACCUMULATED_VARIABLES = {
+    'convective_precipitation', 'eastward_turbulent_surface_stress', 'evaporation',
+    'evaporation_from_bare_soil', 'evaporation_from_open_water_surfaces_excluding_oceans',
+    'evaporation_from_the_top_of_canopy', 'evaporation_from_vegetation_transpiration',
+    'large_scale_precipitation', 'northward_turbulent_surface_stress', 'potential_evaporation',
+    'runoff', 'snow_evaporation', 'snowfall', 'snowmelt', 'sub_surface_runoff',
+    'surface_latent_heat_flux', 'surface_net_solar_radiation',
+    'surface_net_solar_radiation_clear_sky', 'surface_net_thermal_radiation',
+    'surface_net_thermal_radiation_clear_sky', 'surface_runoff', 'surface_sensible_heat_flux',
+    'surface_solar_radiation_downwards', 'surface_thermal_radiation_downwards',
+    'toa_incident_solar_radiation', 'top_net_solar_radiation', 'top_net_solar_radiation_clear_sky',
+    'top_net_thermal_radiation', 'top_net_thermal_radiation_clear_sky', 'total_evaporation',
+    'total_precipitation', 'total_sky_direct_solar_radiation_at_surface',
+}
+# first year of the datasets
+FIRST_YEAR = {'ERA5': 1940, 'ERA5-Land': 1950}
+# ERA5-Land starts at 01:00 of 1 January 1950 also for the instantaneous variables (2m_temperature)
+NO_FIRST_STEP = ('ERA5-Land',)
 
 _LEVEL_PATTERN = re.compile(r'^(\d+)(hPa)?$')
 
@@ -271,14 +293,24 @@ def define_time(freq, product_type='reanalysis'):
     return product_type, days, [str(i).zfill(2) + ':00' for i in range(0, 24, step)]
 
 
-def expected_steps(freq, year, months):
-    """Number of time steps expected in a GRIB file covering the given months of a year"""
+def expected_steps(freq, year, months, dataset=None, var=None):
+    """
+    Number of time steps expected in a GRIB file covering the given months of a year.
+
+    With dataset and var (a name or a list of names), the first step of the dataset is not
+    expected for accumulated sub-daily variables, nor for any variable of ERA5-Land.
+    """
     if freq in ('mon', 'instant'):
         return len(months)
     ndays = sum(calendar.monthrange(int(year), int(m))[1] for m in months)
     if is_daily(freq):
         return ndays
-    return ndays * 24 // HOURS_STEP[freq]
+    steps = ndays * 24 // HOURS_STEP[freq]
+    names = [var] if isinstance(var, str) else (var or [])
+    if (int(year) == FIRST_YEAR.get(dataset) and '01' in months
+            and (dataset in NO_FIRST_STEP or any(name in ACCUMULATED_VARIABLES for name in names))):
+        steps -= 1
+    return steps
 
 
 def month_chunks(request_mode):

@@ -58,6 +58,7 @@ def test_run_parallel_interrupted(tmp_path):
 
 class FakeRemote:
     request_id = 'abc'
+    status = 'successful'
     deleted = False
 
     def __init__(self, error):
@@ -119,3 +120,60 @@ def test_get_cdo_keeps_signal_handlers():
     before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
     cdo_utils.get_cdo().nyear  # the first call of an operator creates a new tempfile store
     assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before
+
+
+def test_stale_request_submitted_again(tmp_path, monkeypatch):
+    monkeypatch.setattr(dl.time, 'sleep', lambda s: None)
+    clock = iter(range(0, 10000, 600))  # 10 minutes per status check
+    monkeypatch.setattr(dl.time, 'monotonic', lambda: next(clock))
+
+    class Remote(FakeRemote):
+        def __init__(self, status):
+            super().__init__(None)
+            self.status = status
+            self.downloaded = False
+
+        def download(self, target):
+            self.downloaded = True
+
+    class Client:
+        def __init__(self):
+            self.client = self
+            self.remotes = []
+
+        def submit(self, name, request):
+            self.remotes.append(Remote('accepted' if not self.remotes else 'successful'))
+            return self.remotes[-1]
+
+    client = Client()
+    dl.submit_and_download(client, 'x', {}, str(tmp_path / 'f.grib'), stale_after=1800)
+    stale, fresh = client.remotes
+    assert stale.deleted and not stale.downloaded
+    assert fresh.downloaded and not fresh.deleted
+
+
+def test_running_request_not_submitted_again(tmp_path, monkeypatch):
+    monkeypatch.setattr(dl.time, 'sleep', lambda s: None)
+    clock = iter(range(0, 100000, 600))
+    monkeypatch.setattr(dl.time, 'monotonic', lambda: next(clock))
+    states = iter(['running'] * 10 + ['successful'])
+
+    class Remote(FakeRemote):
+        @property
+        def status(self):
+            return next(states)
+
+        def download(self, target):
+            pass
+
+    class Client:
+        def __init__(self):
+            self.client = self
+            self.remote = Remote(None)
+
+        def submit(self, name, request):
+            return self.remote
+
+    client = Client()
+    dl.submit_and_download(client, 'x', {}, str(tmp_path / 'f.grib'), stale_after=1800)
+    assert not client.remote.deleted

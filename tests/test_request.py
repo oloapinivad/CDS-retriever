@@ -86,6 +86,19 @@ def test_expected_steps():
     assert expected_steps('daymax', 2001, ['02']) == 28
 
 
+def test_expected_steps_first_step_of_accumulated():
+    tp = 'total_precipitation'
+    assert expected_steps('1hr', 1950, MONTHS, 'ERA5-Land', tp) == 365 * 24 - 1
+    assert expected_steps('1hr', 1950, MONTHS, 'ERA5-Land', [tp, '2m_temperature']) == 365 * 24 - 1
+    assert expected_steps('1hr', 1950, ['02'], 'ERA5-Land', tp) == 28 * 24
+    assert expected_steps('1hr', 1951, MONTHS, 'ERA5-Land', tp) == 365 * 24
+    # the 1950 GRIB of 2m_temperature (instantaneous) has 8759 steps: it starts at 01:00
+    assert expected_steps('1hr', 1950, MONTHS, 'ERA5-Land', '2m_temperature') == 365 * 24 - 1
+    assert expected_steps('1hr', 1951, MONTHS, 'ERA5-Land', '2m_temperature') == 365 * 24
+    assert expected_steps('1hr', 1940, MONTHS, 'ERA5', '2m_temperature') == 366 * 24
+    assert expected_steps('1hr', 1940, MONTHS, 'ERA5', tp) == 366 * 24 - 1
+
+
 def test_month_chunks():
     assert month_chunks('yearly') == [MONTHS]
     assert month_chunks('monthly')[0] == ['01'] and len(month_chunks('monthly')) == 12

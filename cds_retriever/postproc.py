@@ -13,6 +13,7 @@ log = logging.getLogger(__name__)
 
 NC_OPTIONS = '-f nc4 -z zip'
 GRIB_BITS = 24  # GRIB1 packing of netCDF files converted through GRIB
+GRIB_MISSING = -9e33  # GRIB1 cannot encode the NaN missing value of the CDS netCDF files
 _YEARS_RE = re.compile(r'^(\d{4})(?:-(\d{4}))?')
 
 
@@ -72,7 +73,8 @@ def netcdf_via_grib(infile, outfile):
         attrs[key] = line.partition('=')[2].strip().strip('"')
     grib = Path(outfile).with_name(Path(outfile).name + '.grib')
     try:
-        cdo.copy(input=f'-setparam,{grib1_param(attrs["GRIB_paramId"])} {infile}', output=str(grib),
+        param = grib1_param(attrs['GRIB_paramId'])
+        cdo.copy(input=f'-setparam,{param} -setmissval,{GRIB_MISSING} {infile}', output=str(grib),
                  options=f'-f grb -b {GRIB_BITS}')
         cdo.copy(input=str(grib), output=str(outfile), options=NC_OPTIONS + ' --eccodes')
     finally:

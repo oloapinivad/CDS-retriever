@@ -16,6 +16,8 @@ from .request import (PARAM_IDS, build_request, create_filename, download_suffix
 
 log = logging.getLogger(__name__)
 
+STALE_AFTER = 6 * 3600  # seconds a CDS request may stay queued before being submitted again
+
 
 def is_file_complete(filename, minimum_steps):
     """
@@ -75,16 +77,44 @@ def get_client(**kwargs):
     return cdsapi.Client(**kwargs)
 
 
-def submit_and_download(client, dataset, request, target):
+def wait_for_request(remote, stale_after):
+    """
+    Wait until a CDS request is no longer queued.
+
+    Returns False if the request stays 'accepted' for more than stale_after seconds. The status of
+    a queued request can stay stale on the CDS even though an identical request is served at once
+    from the cache, and the cdsapi client would wait for it forever.
+    """
+    start = time.monotonic()
+    sleep = 1.0
+    while True:
+        status = remote.status
+        if status not in ('accepted', 'running'):
+            return True
+        if status == 'running':
+            start = time.monotonic()  # being computed: keep waiting
+        elif time.monotonic() - start > stale_after:
+            return False
+        time.sleep(sleep)
+        sleep = min(sleep * 1.5, 120)
+
+
+def submit_and_download(client, dataset, request, target, stale_after=STALE_AFTER):
     """
     client.retrieve, deleting the CDS request if the download is interrupted
-    (Ctrl-C, workers stopped), so that it does not stay in the CDS queue of the user
+    (Ctrl-C, workers stopped), so that it does not stay in the CDS queue of the user.
+    A request still queued after stale_after seconds is deleted and submitted again.
     """
     datastores = getattr(client, 'client', None)  # ecmwf.datastores client wrapped by cdsapi >= 0.7
     if not hasattr(datastores, 'submit'):
         return client.retrieve(dataset, request, target)
     remote = datastores.submit(dataset, request)
     try:
+        while not wait_for_request(remote, stale_after):
+            log.warning('CDS request %s still queued after %d s: submitting it again',
+                        remote.request_id, stale_after)
+            remote.delete()
+            remote = datastores.submit(dataset, request)
         return remote.download(target)
     except Exception:
         raise
@@ -176,7 +206,7 @@ def month_file(yearfile, month):
 def is_year_complete(outdir, dataset, var, freq, grid, levelout, area, year):
     """True if the yearly GRIB file is already on disk and complete"""
     yearfile = year_file(outdir, dataset, var, freq, grid, levelout, area, year)
-    return is_file_complete(yearfile, expected_steps(freq, year, month_chunks('yearly')[0]))
+    return is_file_complete(yearfile, expected_steps(freq, year, month_chunks('yearly')[0], dataset, var))
 
 
 def chunk_retrieve(dataset, var, freq, year, months, grid, levelout, area, outfile,
@@ -188,7 +218,7 @@ def chunk_retrieve(dataset, var, freq, year, months, grid, levelout, area, outfi
         Path: outfile
     """
     outfile = Path(outfile)
-    minimum_steps = expected_steps(freq, year, months)
+    minimum_steps = expected_steps(freq, year, months, dataset, var)
     if is_file_complete(outfile, minimum_steps):
         return outfile
 
@@ -231,7 +261,7 @@ def concat_months(dataset, var, freq, year, grid, levelout, area, outdir):
 
     tmpfile = yearfile.with_name(yearfile.name + '.part')
     get_cdo().cat(input=' '.join(str(f) for f in monthly_files), output=str(tmpfile))
-    if not is_file_complete(tmpfile, expected_steps(freq, year, month_chunks('yearly')[0])):
+    if not is_file_complete(tmpfile, expected_steps(freq, year, month_chunks('yearly')[0], dataset, var)):
         tmpfile.unlink(missing_ok=True)
         raise RuntimeError(f'Concatenated file {yearfile.name} is incomplete')
     tmpfile.replace(yearfile)
@@ -349,8 +379,8 @@ def group_retrieve(dataset, variables, freq, year, grid, levelout, area, tmpdir,
                           product_type=product_type, retries=retries)
     groupfile.unlink(missing_ok=True)
 
-    steps = expected_steps(freq, year, months)
-    incomplete = [files[var].name for var in todo if not is_file_complete(files[var], steps)]
+    incomplete = [files[var].name for var in todo
+                  if not is_file_complete(files[var], expected_steps(freq, year, months, dataset, var))]
     if incomplete:
         raise RuntimeError(f'Incomplete files after splitting {groupfile.name}: {", ".join(incomplete)}')
     return list(files.values())
