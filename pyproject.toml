@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cds-retriever"
+version = "0.3.0"
+description = "Parallel retrieval and postprocessing of ERA5 / ERA5-Land data from the Copernicus Climate Data Store"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Paolo Davini", email = "paolo.davini@cnr.it" }]
+requires-python = ">=3.9"
+dependencies = [
+    "cdsapi>=0.7.7",
+    "cdo>=1.6",
+    "pyyaml",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.15",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+cds-retriever = "cds_retriever.cli:main"
+
+[project.urls]
+Repository = "https://github.com/oloapinivad/CDS-retriever"
+
+[tool.setuptools.packages.find]
+include = ["cds_retriever*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["network: tests that query the public CDS catalogue (no credentials needed)"]

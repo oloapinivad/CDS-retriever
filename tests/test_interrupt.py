@@ -1,0 +1,179 @@
+import os
+import signal
+import subprocess
+import threading
+import time
+from pathlib import Path
+
+import pytest
+
+from cds_retriever import cli, runner
+from cds_retriever import download as dl
+
+
+def slow_job(outdir, n):
+    """Record the worker and its subprocess, then wait: the cleanup marks an interrupted job"""
+    outdir = Path(outdir)
+    child = subprocess.Popen(['sleep', '60'])
+    (outdir / f'{n}.pids').write_text(f'{os.getpid()} {child.pid}')
+    try:
+        time.sleep(60)
+    finally:
+        (outdir / f'{n}.cleanup').touch()
+
+
+def is_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # zombies of the main process are not running anymore
+    status = Path(f'/proc/{pid}/status')
+    return not (status.exists() and 'zombie' in status.read_text())
+
+
+def test_run_parallel_interrupted(tmp_path):
+    """Ctrl-C stops the workers and their subprocesses, after the cleanups of the running jobs"""
+    jobs = [(f'job{n}', dict(outdir=str(tmp_path), n=n)) for n in range(5)]
+
+    def interrupt():
+        deadline = time.monotonic() + 30
+        while len(list(tmp_path.glob('*.pids'))) < 2 and time.monotonic() < deadline:
+            time.sleep(0.1)
+        os.kill(os.getpid(), signal.SIGINT)  # a real signal, as Ctrl-C: interrupt_main does not wake a wait
+
+    threading.Thread(target=interrupt, daemon=True).start()
+    start = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        runner.run_parallel(slow_job, jobs, 2)
+    assert time.monotonic() - start < 30
+
+    started = sorted(tmp_path.glob('*.pids'))
+    assert len(started) == 2  # pending jobs are cancelled
+    pids = [int(p) for f in started for p in f.read_text().split()]
+    time.sleep(0.5)
+    assert not [pid for pid in pids if is_alive(pid)]
+    assert len(list(tmp_path.glob('*.cleanup'))) == 2
+
+
+class FakeRemote:
+    request_id = 'abc'
+    status = 'successful'
+    deleted = False
+
+    def __init__(self, error):
+        self.error = error
+
+    def download(self, target):
+        raise self.error
+
+    def delete(self):
+        self.deleted = True
+
+
+class FakeClient:
+    """cdsapi >= 0.7 client wrapping an ecmwf.datastores client"""
+
+    def __init__(self, error):
+        self.remote = FakeRemote(error)
+        self.client = self
+
+    def submit(self, name, request):
+        return self.remote
+
+
+def test_download_interrupted_deletes_request(tmp_path):
+    client = FakeClient(KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        dl.download('x', {}, tmp_path / 'f.grib', retries=3, wait=0, client=client)
+    assert client.remote.deleted
+
+
+def test_download_failure_keeps_request(tmp_path):
+    client = FakeClient(ConnectionError('boom'))
+    with pytest.raises(RuntimeError, match='after 2 attempts'):
+        dl.download('x', {}, tmp_path / 'f.grib', retries=2, wait=0, client=client)
+    assert not client.remote.deleted
+
+
+def test_handle_signals(monkeypatch):
+    handlers = {}
+    monkeypatch.setattr(cli.signal, 'signal', lambda sig, handler: handlers.__setitem__(sig, handler))
+    monkeypatch.setattr(cli.signal, 'getsignal', lambda sig: signal.SIG_DFL)
+    cli.handle_signals()
+    assert set(handlers) == {signal.SIGTERM, signal.SIGHUP}
+    with pytest.raises(KeyboardInterrupt):
+        handlers[signal.SIGTERM](signal.SIGTERM, None)
+
+    # nohup: SIGHUP stays ignored
+    handlers.clear()
+    monkeypatch.setattr(cli.signal, 'getsignal', lambda sig: signal.SIG_IGN)
+    cli.handle_signals()
+    assert set(handlers) == {signal.SIGTERM}
+
+
+def test_get_cdo_keeps_signal_handlers():
+    """python-cdo replaces the handlers and makes them restart system calls, delaying Ctrl-C"""
+    pytest.importorskip('cdo')
+    from cds_retriever import cdo_utils
+    cdo_utils.get_cdo.cache_clear()
+    before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
+    cdo_utils.get_cdo().nyear  # the first call of an operator creates a new tempfile store
+    assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before
+
+
+def test_stale_request_submitted_again(tmp_path, monkeypatch):
+    monkeypatch.setattr(dl.time, 'sleep', lambda s: None)
+    clock = iter(range(0, 10000, 600))  # 10 minutes per status check
+    monkeypatch.setattr(dl.time, 'monotonic', lambda: next(clock))
+
+    class Remote(FakeRemote):
+        def __init__(self, status):
+            super().__init__(None)
+            self.status = status
+            self.downloaded = False
+
+        def download(self, target):
+            self.downloaded = True
+
+    class Client:
+        def __init__(self):
+            self.client = self
+            self.remotes = []
+
+        def submit(self, name, request):
+            self.remotes.append(Remote('accepted' if not self.remotes else 'successful'))
+            return self.remotes[-1]
+
+    client = Client()
+    dl.submit_and_download(client, 'x', {}, str(tmp_path / 'f.grib'), stale_after=1800)
+    stale, fresh = client.remotes
+    assert stale.deleted and not stale.downloaded
+    assert fresh.downloaded and not fresh.deleted
+
+
+def test_running_request_not_submitted_again(tmp_path, monkeypatch):
+    monkeypatch.setattr(dl.time, 'sleep', lambda s: None)
+    clock = iter(range(0, 100000, 600))
+    monkeypatch.setattr(dl.time, 'monotonic', lambda: next(clock))
+    states = iter(['running'] * 10 + ['successful'])
+
+    class Remote(FakeRemote):
+        @property
+        def status(self):
+            return next(states)
+
+        def download(self, target):
+            pass
+
+    class Client:
+        def __init__(self):
+            self.client = self
+            self.remote = Remote(None)
+
+        def submit(self, name, request):
+            return self.remote
+
+    client = Client()
+    dl.submit_and_download(client, 'x', {}, str(tmp_path / 'f.grib'), stale_after=1800)
+    assert not client.remote.deleted

@@ -1,11 +1,17 @@
-name: CDS_retrieve
+name: CDS-retriever
 channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python<3.14
-  - cdsapi
+  - python=3.15
+  - cdsapi>=0.7.7
+  - cdo
   - python-cdo
   - pyyaml
   - eccodes>=2.41.0
-  
+  - xarray    # not needed by the tool: to open the output (and silences python-cdo warnings)
+  - netcdf4
+  - pytest
+  - pip
+  - pip:
+    - -e .
